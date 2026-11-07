@@ -9,7 +9,7 @@ const likeKeyboard = (postId, count) =>
   Markup.inlineKeyboard([[Markup.button.callback(`👍 ${count}`, `like:${postId}`)]]);
 
 function createBot() {
-  const b = new Telegraf(process.env.BOT_TOKEN, { telegram: { agent: new https.Agent({ keepAlive: false }) } });
+  const b = new Telegraf(process.env.BOT_TOKEN, { telegram: { agent: new https.Agent({ keepAlive: false, family: 4 }) } });
   // Лайк — inline-кнопка под постом: повторное нажатие снимает лайк
   b.action(/^like:(\d+)$/, async (ctx) => {
     const postId = Number(ctx.match[1]);
