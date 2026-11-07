@@ -1,5 +1,7 @@
 import { Telegraf, Markup } from 'telegraf';
-import { createReadStream } from 'node:fs';
+import https from 'node:https';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import { q } from './db.js';
 import { localUpload } from './uploads.js';
 
@@ -7,7 +9,7 @@ const likeKeyboard = (postId, count) =>
   Markup.inlineKeyboard([[Markup.button.callback(`👍 ${count}`, `like:${postId}`)]]);
 
 function createBot() {
-  const b = new Telegraf(process.env.BOT_TOKEN);
+  const b = new Telegraf(process.env.BOT_TOKEN, { telegram: { agent: new https.Agent({ keepAlive: false }) } });
   // Лайк — inline-кнопка под постом: повторное нажатие снимает лайк
   b.action(/^like:(\d+)$/, async (ctx) => {
     const postId = Number(ctx.match[1]);
@@ -38,7 +40,7 @@ export async function publishPost(post) {
   };
   // картинка, загруженная с устройства, уходит в Telegram файлом; внешняя ссылка — по URL
   const file = localUpload(post.media_url);
-  const photo = file ? { source: createReadStream(file) } : post.media_url;
+  const photo = file ? { source: await readFile(file), filename: path.basename(file) } : post.media_url;
   const msg = post.media_url
     ? await bot.telegram.sendPhoto(post.tg_chat_id, photo, { caption: post.content, ...extra })
     : await bot.telegram.sendMessage(post.tg_chat_id, post.content, extra);
