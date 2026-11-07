@@ -1,7 +1,7 @@
-import { Telegraf, Markup } from 'telegraf';
 import https from 'node:https';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { Telegraf, Markup } from 'telegraf';
 import { q } from './db.js';
 import { localUpload } from './uploads.js';
 
@@ -9,7 +9,9 @@ const likeKeyboard = (postId, count) =>
   Markup.inlineKeyboard([[Markup.button.callback(`👍 ${count}`, `like:${postId}`)]]);
 
 function createBot() {
-  const b = new Telegraf(process.env.BOT_TOKEN, { telegram: { agent: new https.Agent({ keepAlive: false, family: 4 }) } });
+  const b = new Telegraf(process.env.BOT_TOKEN, {
+    telegram: { agent: new https.Agent({ keepAlive: false, family: 4 }) },
+  });
   // Лайк — inline-кнопка под постом: повторное нажатие снимает лайк
   b.action(/^like:(\d+)$/, async (ctx) => {
     const postId = Number(ctx.match[1]);
@@ -32,17 +34,47 @@ function createBot() {
 
 export const bot = process.env.BOT_TOKEN ? (globalThis.__tgmBot ??= createBot()) : null;
 
+const MIME = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
+
+/** Фото из файла: multipart с известной длиной (как у curl), без потоковой передачи. */
+async function sendPhotoFile(chatId, file, { caption, parse_mode, reply_markup }) {
+  const form = new FormData();
+  form.append('chat_id', String(chatId));
+  if (caption) form.append('caption', caption);
+  if (parse_mode) form.append('parse_mode', parse_mode);
+  form.append('reply_markup', JSON.stringify(reply_markup));
+  const ext = path.extname(file).slice(1);
+  form.append('photo', new Blob([await readFile(file)], { type: MIME[ext] || 'image/jpeg' }), path.basename(file));
+
+  let res;
+  try {
+    res = await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendPhoto`, {
+      method: 'POST',
+      body: form,
+      signal: AbortSignal.timeout(60_000),
+    });
+  } catch (e) {
+    // текст ошибки без URL, чтобы токен не попал в логи и в интерфейс
+    throw new Error(`Не удалось отправить фото: ${e.cause?.code || e.cause?.message || e.message}`);
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!data.ok) throw new Error(data.description || `Telegram ответил ${res.status}`);
+  return data.result.message_id;
+}
+
 /** Публикует пост в канал, возвращает message_id. post должен содержать tg_chat_id. */
 export async function publishPost(post) {
-  const extra = {
-    ...(post.parse_mode ? { parse_mode: post.parse_mode } : {}),
-    ...likeKeyboard(post.id, post.likes_count || 0),
-  };
-  // картинка, загруженная с устройства, уходит в Telegram файлом; внешняя ссылка — по URL
+  const keyboard = likeKeyboard(post.id, post.likes_count || 0);
+  const parse = post.parse_mode ? { parse_mode: post.parse_mode } : {};
+
   const file = localUpload(post.media_url);
-  const photo = file ? { source: await readFile(file), filename: path.basename(file) } : post.media_url;
+  if (file) {
+    return sendPhotoFile(post.tg_chat_id, file, { caption: post.content, ...parse, reply_markup: keyboard.reply_markup });
+  }
+
+  const extra = { ...parse, ...keyboard };
   const msg = post.media_url
-    ? await bot.telegram.sendPhoto(post.tg_chat_id, photo, { caption: post.content, ...extra })
+    ? await bot.telegram.sendPhoto(post.tg_chat_id, post.media_url, { caption: post.content, ...extra })
     : await bot.telegram.sendMessage(post.tg_chat_id, post.content, extra);
   return msg.message_id;
 }
