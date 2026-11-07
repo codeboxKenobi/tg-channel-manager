@@ -62,3 +62,7 @@ pages/ components/ composables/ middleware/   интерфейс Nuxt
 ## Запуск в PM2
 - cd /folder path
 - pm2 start ecosystem.config.cjs
+
+## Стоп в PM2
+- cd /folder path
+- pm2 stop tg-channel-manager
