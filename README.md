@@ -57,3 +57,8 @@ pages/ components/ composables/ middleware/   интерфейс Nuxt
 - Bot API не отдаёт просмотры постов канала, поэтому их в метриках нет.
 - Опубликованные посты в Telegram не редактируются (только удаляются).
 - Seeder использует вымышленные `tg_chat_id`: посты в этих каналах не опубликуются, подключите свой канал.
+
+
+## Запуск в PM2
+- cd /folder path
+- pm2 start ecosystem.config.cjs
