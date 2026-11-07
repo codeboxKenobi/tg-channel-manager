@@ -40,7 +40,7 @@ watch(channelId, load)
   <section>
     <div class="row between head">
       <h1>Метрики</h1>
-      <select v-model="channelId" style="width: 210px">
+      <select v-model="channelId" class="filter">
         <option value="">Все каналы</option>
         <option v-for="c in channels" :key="c.id" :value="c.id">{{ c.title }}</option>
       </select>
@@ -65,7 +65,7 @@ watch(channelId, load)
 
     <h2>Каналы</h2>
     <div class="card table-wrap">
-      <table>
+      <table class="stack">
         <thead>
           <tr>
             <th>Канал</th><th class="num">Подписчики</th><th class="num">Рост за 30 дней</th>
@@ -74,12 +74,12 @@ watch(channelId, load)
         </thead>
         <tbody>
           <tr v-for="c in channels" :key="c.id">
-            <td>{{ c.title }}</td>
-            <td class="num">{{ fmtNum(c.subscribers_count) }}</td>
-            <td class="num" :class="{ pos: c.growth_30d > 0 }">{{ c.growth_30d > 0 ? '+' : '' }}{{ fmtNum(c.growth_30d) }}</td>
-            <td class="num">{{ fmtNum(c.posts) }}</td>
-            <td class="num">{{ fmtNum(c.likes) }}</td>
-            <td class="num">{{ c.avg_likes }}</td>
+            <td data-label="Канал">{{ c.title }}</td>
+            <td class="num" data-label="Подписчики">{{ fmtNum(c.subscribers_count) }}</td>
+            <td class="num" data-label="Рост за 30 дней" :class="{ pos: c.growth_30d > 0 }">{{ c.growth_30d > 0 ? '+' : '' }}{{ fmtNum(c.growth_30d) }}</td>
+            <td class="num" data-label="Постов">{{ fmtNum(c.posts) }}</td>
+            <td class="num" data-label="Лайков">{{ fmtNum(c.likes) }}</td>
+            <td class="num" data-label="Лайков на пост">{{ c.avg_likes }}</td>
           </tr>
         </tbody>
       </table>
@@ -88,12 +88,14 @@ watch(channelId, load)
     <h2>Лучшие посты по лайкам</h2>
     <div class="card table-wrap">
       <p v-if="!top.length" class="muted" style="margin: 0">Опубликованных постов пока нет.</p>
-      <table v-else>
+      <table v-else class="stack">
         <thead><tr><th>Пост</th><th>Канал</th><th>Дата</th><th class="num">Лайки</th></tr></thead>
         <tbody>
           <tr v-for="p in top" :key="p.id">
-            <td>{{ p.title }}</td><td>{{ p.channel_title }}</td><td>{{ fmtDate(p.published_at) }}</td>
-            <td class="num">{{ fmtNum(p.likes_count) }}</td>
+            <td data-label="Пост">{{ p.title }}</td>
+            <td data-label="Канал">{{ p.channel_title }}</td>
+            <td data-label="Дата">{{ fmtDate(p.published_at) }}</td>
+            <td class="num" data-label="Лайки">{{ fmtNum(p.likes_count) }}</td>
           </tr>
         </tbody>
       </table>

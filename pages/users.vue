@@ -59,20 +59,20 @@ onMounted(() => run(async () => {}))
     <p v-if="error" class="error">{{ error }}</p>
 
     <div class="card table-wrap">
-      <table>
+      <table class="stack">
         <thead><tr><th>Имя</th><th>Email</th><th>Роль</th><th>Создан</th><th /></tr></thead>
         <tbody>
           <tr v-for="u in users" :key="u.id">
-            <td>{{ u.name }}</td>
-            <td>{{ u.email }}</td>
-            <td>
+            <td data-label="Имя">{{ u.name }}</td>
+            <td data-label="Email">{{ u.email }}</td>
+            <td data-label="Роль">
               <select :value="u.role" :disabled="busy || u.id === me?.id" style="width: 160px" @change="setRole(u, ($event.target as HTMLSelectElement).value)">
                 <option value="editor">Редактор</option>
                 <option value="admin">Администратор</option>
               </select>
             </td>
-            <td>{{ fmtDate(u.created_at) }}</td>
-            <td class="num">
+            <td data-label="Создан">{{ fmtDate(u.created_at) }}</td>
+            <td class="num actions-cell">
               <button :disabled="busy" @click="resetPassword(u)">Сбросить пароль</button>
               <button class="danger" :disabled="busy || u.id === me?.id" @click="remove(u)">Удалить</button>
             </td>

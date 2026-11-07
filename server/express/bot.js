@@ -1,5 +1,7 @@
 import { Telegraf, Markup } from 'telegraf';
+import { createReadStream } from 'node:fs';
 import { q } from './db.js';
+import { localUpload } from './uploads.js';
 
 const likeKeyboard = (postId, count) =>
   Markup.inlineKeyboard([[Markup.button.callback(`👍 ${count}`, `like:${postId}`)]]);
@@ -34,8 +36,11 @@ export async function publishPost(post) {
     ...(post.parse_mode ? { parse_mode: post.parse_mode } : {}),
     ...likeKeyboard(post.id, post.likes_count || 0),
   };
+  // картинка, загруженная с устройства, уходит в Telegram файлом; внешняя ссылка — по URL
+  const file = localUpload(post.media_url);
+  const photo = file ? { source: createReadStream(file) } : post.media_url;
   const msg = post.media_url
-    ? await bot.telegram.sendPhoto(post.tg_chat_id, post.media_url, { caption: post.content, ...extra })
+    ? await bot.telegram.sendPhoto(post.tg_chat_id, photo, { caption: post.content, ...extra })
     : await bot.telegram.sendMessage(post.tg_chat_id, post.content, extra);
   return msg.message_id;
 }

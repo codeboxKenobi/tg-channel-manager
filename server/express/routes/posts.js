@@ -3,6 +3,7 @@ import { q } from '../db.js';
 import { bot } from '../bot.js';
 import { publishById } from '../scheduler.js';
 import { httpError } from '../http.js';
+import { localUpload, removeUploadIfUnused } from '../uploads.js';
 
 const r = Router();
 
@@ -14,6 +15,7 @@ function parse(body) {
   if (content.length > (media_url ? 1024 : 4096)) {
     throw httpError(media_url ? 'Подпись к фото — не более 1024 символов' : 'Текст — не более 4096 символов');
   }
+  if (media_url && !/^https?:\/\//i.test(media_url) && !localUpload(media_url)) throw httpError('Некорректная ссылка на изображение');
   if (parse_mode && !['HTML', 'MarkdownV2'].includes(parse_mode)) throw httpError('Некорректный parse_mode');
   let when = null;
   if (scheduled_at) {
@@ -65,7 +67,7 @@ r.post('/', async (req, res) => {
 // scheduled_at задан → пост ставится в график, пусто → остаётся черновиком
 r.put('/:id', async (req, res) => {
   const p = parse(req.body);
-  const { rows: [cur] } = await q('select status from posts where id = $1', [req.params.id]);
+  const { rows: [cur] } = await q('select status, media_url from posts where id = $1', [req.params.id]);
   if (!cur) throw httpError('Пост не найден', 404);
   if (['published', 'publishing'].includes(cur.status)) throw httpError('Опубликованный пост редактировать нельзя', 409);
   const { rows: [row] } = await q(
@@ -74,6 +76,7 @@ r.put('/:id', async (req, res) => {
      where id = $1 returning *`,
     [req.params.id, p.channel_id, p.title, p.content, p.media_url, p.parse_mode, p.scheduled_at, p.status],
   );
+  if (cur.media_url && cur.media_url !== p.media_url) await removeUploadIfUnused(cur.media_url);
   res.json(row);
 });
 
@@ -93,7 +96,7 @@ r.post('/:id/publish', async (req, res) => {
 // ?tg=1 — дополнительно удалить сообщение в канале
 r.delete('/:id', async (req, res) => {
   const { rows: [post] } = await q(
-    'select p.tg_message_id, p.status, c.tg_chat_id from posts p join channels c on c.id = p.channel_id where p.id = $1',
+    'select p.tg_message_id, p.status, p.media_url, c.tg_chat_id from posts p join channels c on c.id = p.channel_id where p.id = $1',
     [req.params.id],
   );
   if (!post) throw httpError('Пост не найден', 404);
@@ -101,6 +104,7 @@ r.delete('/:id', async (req, res) => {
     await bot.telegram.deleteMessage(post.tg_chat_id, Number(post.tg_message_id)).catch(() => {});
   }
   await q('delete from posts where id = $1', [req.params.id]);
+  await removeUploadIfUnused(post.media_url);
   res.status(204).end();
 });
 

@@ -36,7 +36,7 @@ watch(channelId, load)
   <section>
     <div class="row between head">
       <h1>Опубликованные</h1>
-      <select v-model="channelId" style="width: 210px">
+      <select v-model="channelId" class="filter">
         <option value="">Все каналы</option>
         <option v-for="c in channels" :key="c.id" :value="c.id">{{ c.title }}</option>
       </select>
@@ -54,6 +54,7 @@ watch(channelId, load)
         <span class="badge published">👍 {{ fmtNum(p.likes_count) }}</span>
       </div>
       <p class="post-content">{{ p.content }}</p>
+      <img v-if="p.media_url" :src="p.media_url" class="thumb" alt="" loading="lazy" @error="($event.target as HTMLImageElement).style.display = 'none'" />
       <p class="muted" style="margin: 0">Опубликовано: {{ fmtDate(p.published_at) }}<span v-if="p.author_name"> · автор: {{ p.author_name }}</span></p>
       <div class="actions">
         <a v-if="link(p)" :href="link(p)!" target="_blank" rel="noopener"><button>Открыть в Telegram</button></a>

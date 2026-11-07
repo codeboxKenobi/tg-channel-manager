@@ -77,7 +77,7 @@ watch(channelId, () => load().catch((e) => (error.value = e.message)))
     <div class="row between head">
       <h1>Подготовка постов</h1>
       <div class="row">
-        <select v-model="channelId" style="width: 210px">
+        <select v-model="channelId" class="filter">
           <option value="">Все каналы</option>
           <option v-for="c in channels" :key="c.id" :value="c.id">{{ c.title }}</option>
         </select>
@@ -103,6 +103,7 @@ watch(channelId, () => load().catch((e) => (error.value = e.message)))
         <span class="badge" :class="p.status">{{ STATUS[p.status] }}</span>
       </div>
       <p class="post-content">{{ p.content }}</p>
+      <img v-if="p.media_url" :src="p.media_url" class="thumb" alt="" loading="lazy" @error="($event.target as HTMLImageElement).style.display = 'none'" />
       <p v-if="p.scheduled_at" class="muted" style="margin: 0">Публикация: {{ fmtDate(p.scheduled_at) }}</p>
       <p v-if="p.author_name" class="muted" style="margin: 4px 0 0">Автор: {{ p.author_name }}</p>
       <p v-if="p.error" class="error" style="margin: 4px 0 0">{{ p.error }}</p>
