@@ -62,16 +62,30 @@ function divInner(html, openEnd) {
   return html.slice(openEnd);
 }
 
-/** HTML поста → простой текст: <br> в переводы строк, ссылки с «спрятанным» адресом — «текст (url)». */
-export function htmlToText(html) {
+// Ссылки на соцсети, мессенджеры, сокращатели и т.п.: такие строки — подписи-реклама («Мы в MAX — подписаться»)
+const PROMO_HOST_RE = /(^|\.)(t\.me|telegram\.me|telegra\.ph|telegram\.org|max\.ru|vk\.com|vk\.cc|vk\.me|vkvideo\.ru|ok\.ru|youtube\.com|youtu\.be|instagram\.com|facebook\.com|fb\.com|twitter\.com|x\.com|tiktok\.com|wa\.me|whatsapp\.com|dzen\.ru|zen\.yandex\.ru|rutube\.ru|boosty\.to|patreon\.com|bit\.ly|clck\.ru|goo\.gl|tinyurl\.com)$/i;
+const MARK_RE = /\u0001([PL])([^\u0002]*)\u0002/g;
+
+function isPromoLink(url) {
+  if (!/^https?:\/\//i.test(url)) return true; // tg://, mailto: и пр.
+  try {
+    return PROMO_HOST_RE.test(new URL(url).hostname);
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * HTML → простой текст. С mark=true ссылки не теряются, а помечаются (P — на мессенджер/соцсеть, L — на другой сайт):
+ * по меткам cleanPostText решает, какие строки — реклама. Без mark остаётся только подпись ссылки.
+ */
+export function htmlToText(html, { mark = false } = {}) {
   let s = html.replace(/<br\s*\/?>/gi, '\n');
   s = s.replace(/<a\b[^>]*?href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, (_m, href, inner) => {
     const label = inner.replace(/<[^>]+>/g, '');
     const url = decode(href);
-    if (!/^https?:\/\//i.test(url)) return label; // #хештеги и прочие относительные ссылки
-    const bare = (x) => x.toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/\/+$/, '');
-    const shown = bare(decode(label).trim().replace(/^[@#]/, ''));
-    return shown && bare(url).includes(shown) ? label : `${label} (${href})`;
+    if (!mark || !/^[a-z][a-z0-9+.-]*:/i.test(url)) return label; // #хештеги и прочие относительные ссылки
+    return `\u0001${isPromoLink(url) ? 'P' : 'L'}${label.replace(/[\u0001\u0002]/g, '')}\u0002`;
   });
   s = s.replace(/<[^>]+>/g, ''); // теги убираем до декодирования, иначе «&lt;b&gt;» превратится в тег
   return decode(s)
@@ -81,26 +95,51 @@ export function htmlToText(html) {
     .trim();
 }
 
+const words = (s) => s.match(/[\p{L}\p{N}]+/gu)?.length ?? 0;
+const unmark = (s) => s.replace(MARK_RE, (_m, kind, label) => (kind === 'P' ? '' : label));
+
+/**
+ * Строка со ссылками — реклама, если от неё почти ничего не осталось без ссылок
+ * («📢 Прямой Эфир, 💰 Деньги в эфире | Наш MAX», «Подпишись👉 CUBE.VIDEO») или это короткая строка со ссылкой на мессенджер.
+ * В обычном предложении («Президент подписал указ…») остаётся подпись ссылки без самой ссылки.
+ */
+function promoClean(text) {
+  const out = [];
+  for (const line of text.split('\n')) {
+    if (!line.includes('\u0001')) {
+      out.push(line);
+      continue;
+    }
+    const plain = words(line.replace(MARK_RE, ' ').replace(HASHTAG_RE, ' '));
+    const hasPromo = /\u0001P/.test(line);
+    if (plain <= 2 || (hasPromo && plain <= 8)) continue;
+    out.push(unmark(line).replace(/[ \t]{2,}/g, ' ').trim());
+  }
+  return out.join('\n');
+}
+
 const TLDS = 'com|ru|org|net|me|info|su|ua|by|kz|xyz|site|online|link|рф';
 const LINK_RES = [
-  /\s*\(\s*(?:https?:\/\/|tg:\/\/)[^\s)]+\s*\)/gi, // «текст (https://…)», как их делает htmlToText
+  /\s*\(\s*(?:https?:\/\/|tg:\/\/)[^\s)]+\s*\)/gi, // «текст (https://…)»
   /(?:https?:\/\/|tg:\/\/|www\.)\S+/gi,
   /\b(?:t\.me|telegram\.me|telegra\.ph)\/\S*/gi,
   new RegExp(`\\b(?:[a-z0-9-]+\\.)+(?:${TLDS})\\b(?:\\/\\S*)?`, 'gi'), // голые домены: example.com/page
 ];
 const EMAIL_RE = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g;
 const MENTION_RE = /(?<![\w.])@[A-Za-z][A-Za-z0-9_]{3,31}\b/g;
+const HASHTAG_RE = /(?<![\p{L}\p{N}_&])#(?=[\p{N}_]*\p{L})[\p{L}\p{N}_]+(?:@\w+)?/gu;
+const DIVIDER_RE = /^[\s\-–—_=*~•·|─━▬➖▪▫◾◽]*$/u;
 
 /**
- * Убирает из текста всё, что указывает на источник: ссылки, домены, t.me, e-mail и @упоминания.
- * Строки, которые после этого остались пустыми или только со значками (например «👉 @channel»), удаляются.
+ * Убирает из текста всё, что указывает на источник: ссылки, домены, t.me, e-mail, @упоминания и #хештеги.
+ * Строки, от которых после этого ничего не осталось (например «👉 @channel»), удаляются, как и «хвосты»-разделители.
  */
 export function stripLinks(text) {
   const out = [];
   for (const line of String(text).split('\n')) {
     let s = line.replace(EMAIL_RE, '');
     for (const re of LINK_RES) s = s.replace(re, '');
-    s = s.replace(MENTION_RE, '');
+    s = s.replace(MENTION_RE, '').replace(HASHTAG_RE, '');
     if (s === line) {
       out.push(line);
       continue;
@@ -109,8 +148,12 @@ export function stripLinks(text) {
     if (/^[\p{P}\p{S}\s]*$/u.test(s)) continue; // от строки ничего не осталось
     out.push(s.replace(/\s*[:\-–—|·•]+$/u, '').replace(/^[\-–—|·•:]+\s*/u, ''));
   }
+  while (out.length && DIVIDER_RE.test(out[out.length - 1])) out.pop(); // остатки разделителя перед удалённой подписью
   return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
+
+/** Текст поста для сохранения: без рекламных блоков, ссылок, упоминаний и хештегов. */
+export const cleanPostHtml = (html) => stripLinks(promoClean(htmlToText(html, { mark: true })));
 
 export function isTelegramCdn(url) {
   try {
@@ -142,7 +185,7 @@ export function parsePage(html, username) {
     ids.push(id);
 
     const textTag = /<div class="[^"]*\bjs-message_text\b[^"]*"[^>]*>/.exec(chunk);
-    const content = textTag ? htmlToText(divInner(chunk, textTag.index + textTag[0].length)) : '';
+    const content = textTag ? cleanPostHtml(divInner(chunk, textTag.index + textTag[0].length)) : '';
     if (!content) continue; // фото/видео без подписи в черновик не превратить — текст обязателен
 
     const photo = chunk.match(/tgme_widget_message_photo_wrap[^>]*?style="[^"]*?background-image:\s*url\((['"]?)([^'")]+)\1\)/);
