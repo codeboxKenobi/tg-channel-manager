@@ -19,16 +19,29 @@ const showPreview = computed(() => isUploaded.value || /^https?:\/\//i.test(form
 const limit = computed(() => (form.media_url ? 1024 : 4096))
 const uploading = ref(false)
 const uploadError = ref('')
+// формат картинки для Telegram: широкая (16:9) занимает всю ширину поста
+const fit = ref<ImageFit>('blur')
+let lastFile: File | null = null
 
 async function onFile(e: Event) {
   const input = e.target as HTMLInputElement
   const file = input.files?.[0]
   input.value = '' // чтобы тот же файл можно было выбрать повторно
   if (!file) return
+  lastFile = file
+  await upload(file)
+}
+
+// сменили формат после выбора файла — готовим картинку заново из оригинала
+watch(fit, () => {
+  if (lastFile && isUploaded.value) upload(lastFile)
+})
+
+async function upload(file: File) {
   uploadError.value = ''
   uploading.value = true
   try {
-    const blob = await toJpeg(file)
+    const blob = await toJpeg(file, fit.value)
     const { url } = await api<{ url: string }>('/uploads', {
       method: 'POST',
       body: blob,
@@ -82,6 +95,12 @@ function submit() {
           </label>
           <button v-if="form.media_url" type="button" class="danger" @click="form.media_url = ''">Убрать картинку</button>
         </div>
+        <label>Формат картинки в Telegram</label>
+        <select v-model="fit">
+          <option value="blur">Во всю ширину 16:9 (с размытыми полями)</option>
+          <option value="crop">Во всю ширину 16:9 (обрезать по центру)</option>
+          <option value="none">Как есть</option>
+        </select>
         <p v-if="uploadError" class="error" style="margin: 8px 0 0">{{ uploadError }}</p>
         <img v-if="showPreview" :key="form.media_url" :src="form.media_url" class="preview" alt="Предпросмотр картинки" />
       </div>
