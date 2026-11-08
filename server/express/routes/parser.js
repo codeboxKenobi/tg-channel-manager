@@ -3,7 +3,7 @@ import { q } from '../db.js';
 import { httpError } from '../http.js';
 import { assertChannelAccess } from '../access.js';
 import { removeUploadIfUnused } from '../uploads.js';
-import { clampLimit, downloadImage, normalizeChannel, scrapeChannel } from '../parser.js';
+import { clampLimit, downloadImage, normalizeChannel, scrapeChannel, stripLinks } from '../parser.js';
 
 const r = Router();
 
@@ -128,10 +128,9 @@ r.get('/posts', async (req, res) => {
   res.json({ items: rows.map(({ total, ...p }) => p), total: rows[0]?.total ?? 0 });
 });
 
-const titleFrom = (content, username) => {
+const titleFrom = (content) => {
   const first = content.split('\n').find((l) => l.trim())?.trim() ?? '';
-  const cut = first.length > 80 ? `${first.slice(0, 79).trimEnd()}…` : first;
-  return cut || `Пост из @${username}`;
+  return first.length > 80 ? `${first.slice(0, 79).trimEnd()}…` : first || 'Без заголовка';
 };
 
 // «Сформировать пост»: создаёт черновик в «Подготовке постов» для выбранного канала публикации
@@ -142,14 +141,15 @@ r.post('/posts/:id/draft', async (req, res) => {
   if (!(await q('select 1 from channels where id = $1', [channelId])).rowCount) throw httpError('Канал не найден', 404);
 
   const { rows: [pp] } = await q(
-    `select pp.*, s.username from parsed_posts pp join parser_sources s on s.id = pp.source_id where pp.id = $1`,
+    `select * from parsed_posts where id = $1`,
     [req.params.id],
   );
   if (!pp) throw httpError('Пост не найден', 404);
   if (pp.draft_post_id) throw httpError('Пост уже сформирован', 409);
 
-  const content = pp.content.trim().slice(0, 4096);
-  if (!content) throw httpError('У поста нет текста');
+  // в черновик не попадают ссылки и упоминания: ничто не должно вести к каналу-источнику
+  const content = stripLinks(pp.content).slice(0, 4096);
+  if (!content) throw httpError('После удаления ссылок и упоминаний в посте не осталось текста');
 
   let media = pp.media_url;
   let note = null;
@@ -157,14 +157,15 @@ r.post('/posts/:id/draft', async (req, res) => {
     media = null; // подпись к фото в Telegram — не больше 1024 символов
     note = 'Картинка не добавлена: текст длиннее 1024 символов (лимит подписи к фото в Telegram)';
   } else if (media) {
-    // свою копию картинки храним локально; если скачать не вышло — оставляем ссылку на CDN
-    media = await downloadImage(media).catch(() => media);
+    // картинка сохраняется как своя локальная копия; ссылку на CDN в черновик не кладём
+    media = await downloadImage(media).catch(() => null);
+    if (!media) note = 'Картинку скачать не удалось, добавьте её вручную';
   }
 
   const { rows: [post] } = await q(
     `insert into posts (channel_id, title, content, media_url, status, created_by)
      values ($1, $2, $3, $4, 'draft', $5) returning *`,
-    [channelId, titleFrom(content, pp.username), content, media, req.user.id],
+    [channelId, titleFrom(content), content, media, req.user.id],
   );
   // защита от двойного нажатия: связываем только если черновик ещё не создан
   const claimed = await q('update parsed_posts set draft_post_id = $2 where id = $1 and draft_post_id is null', [pp.id, post.id]);

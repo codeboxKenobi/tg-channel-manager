@@ -81,6 +81,37 @@ export function htmlToText(html) {
     .trim();
 }
 
+const TLDS = 'com|ru|org|net|me|info|su|ua|by|kz|xyz|site|online|link|рф';
+const LINK_RES = [
+  /\s*\(\s*(?:https?:\/\/|tg:\/\/)[^\s)]+\s*\)/gi, // «текст (https://…)», как их делает htmlToText
+  /(?:https?:\/\/|tg:\/\/|www\.)\S+/gi,
+  /\b(?:t\.me|telegram\.me|telegra\.ph)\/\S*/gi,
+  new RegExp(`\\b(?:[a-z0-9-]+\\.)+(?:${TLDS})\\b(?:\\/\\S*)?`, 'gi'), // голые домены: example.com/page
+];
+const EMAIL_RE = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g;
+const MENTION_RE = /(?<![\w.])@[A-Za-z][A-Za-z0-9_]{3,31}\b/g;
+
+/**
+ * Убирает из текста всё, что указывает на источник: ссылки, домены, t.me, e-mail и @упоминания.
+ * Строки, которые после этого остались пустыми или только со значками (например «👉 @channel»), удаляются.
+ */
+export function stripLinks(text) {
+  const out = [];
+  for (const line of String(text).split('\n')) {
+    let s = line.replace(EMAIL_RE, '');
+    for (const re of LINK_RES) s = s.replace(re, '');
+    s = s.replace(MENTION_RE, '');
+    if (s === line) {
+      out.push(line);
+      continue;
+    }
+    s = s.replace(/[ \t]{2,}/g, ' ').trim();
+    if (/^[\p{P}\p{S}\s]*$/u.test(s)) continue; // от строки ничего не осталось
+    out.push(s.replace(/\s*[:\-–—|·•]+$/u, '').replace(/^[\-–—|·•:]+\s*/u, ''));
+  }
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 export function isTelegramCdn(url) {
   try {
     const u = new URL(url);
