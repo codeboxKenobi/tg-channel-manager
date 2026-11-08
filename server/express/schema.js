@@ -76,4 +76,29 @@ create table if not exists channel_users (
   primary key (channel_id, user_id)
 );
 create index if not exists channel_users_user_idx on channel_users (user_id);
+
+-- парсер публичных Telegram-каналов: источники и спарсенные посты
+create table if not exists parser_sources (
+  id             serial primary key,
+  username       text not null unique,
+  title          text,
+  last_parsed_at timestamptz,
+  last_error     text,
+  created_by     int references users(id) on delete set null,
+  created_at     timestamptz not null default now()
+);
+
+create table if not exists parsed_posts (
+  id            serial primary key,
+  source_id     int not null references parser_sources(id) on delete cascade,
+  tg_post_id    int not null,
+  content       text not null,
+  media_url     text,
+  posted_at     timestamptz,
+  draft_post_id int references posts(id) on delete set null,
+  created_at    timestamptz not null default now(),
+  unique (source_id, tg_post_id)
+);
+create index if not exists parsed_posts_source_idx on parsed_posts (source_id, posted_at desc);
+create index if not exists parsed_posts_posted_idx on parsed_posts (posted_at desc);
 `;

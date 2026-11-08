@@ -34,7 +34,7 @@ const topics = [
 let t = 0;
 const nextTopic = () => topics[t++ % topics.length];
 
-await q('truncate sessions, post_likes, channel_stats, posts, channels, users restart identity cascade');
+await q('truncate sessions, post_likes, channel_stats, parsed_posts, parser_sources, posts, channels, users restart identity cascade');
 
 // пользователи: пароль берётся из ADMIN_PASSWORD или генерируется и печатается в конце
 const pwd = () => crypto.randomBytes(9).toString('base64url');

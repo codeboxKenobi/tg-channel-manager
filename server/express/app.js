@@ -7,6 +7,7 @@ import channels from './routes/channels.js';
 import posts from './routes/posts.js';
 import uploads from './routes/uploads.js';
 import metrics from './routes/metrics.js';
+import parser from './routes/parser.js';
 
 export const app = express();
 app.disable('x-powered-by');
@@ -24,6 +25,7 @@ app.use('/api/channels', channels);
 app.use('/api/posts', posts);
 app.use('/api/uploads', uploads);
 app.use('/api/metrics', metrics);
+app.use('/api/parser', parser);
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Не найдено' }));
 
 // Express 5 сам передаёт сюда ошибки async-обработчиков
