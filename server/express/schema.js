@@ -67,4 +67,13 @@ create table if not exists channel_stats (
 create index if not exists channel_stats_idx on channel_stats (channel_id, recorded_at);
 
 alter table posts add column if not exists created_by int references users(id) on delete set null;
+
+-- закрепление каналов за пользователями (администратор видит все каналы без записей здесь)
+create table if not exists channel_users (
+  channel_id int not null references channels(id) on delete cascade,
+  user_id    int not null references users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (channel_id, user_id)
+);
+create index if not exists channel_users_user_idx on channel_users (user_id);
 `;

@@ -2,12 +2,15 @@
 const api = useApi()
 const { user: me } = useAuth()
 const users = ref<any[]>([])
+const channels = ref<any[]>([])
 const form = reactive({ email: '', name: '', password: '', role: 'editor' })
 const error = ref('')
 const busy = ref(false)
+const accessFor = ref<any | null>(null)
 
 async function load() {
   users.value = await api('/users')
+  channels.value = await api('/channels')
 }
 async function run(fn: () => Promise<any>) {
   error.value = ''
@@ -35,6 +38,16 @@ const resetPassword = (u: any) => {
 const remove = (u: any) =>
   confirm(`Удалить пользователя ${u.email}?`) ? run(() => api(`/users/${u.id}`, { method: 'DELETE' })) : undefined
 
+const channelOptions = computed(() =>
+  channels.value.map((c) => ({ id: c.id, label: c.title, hint: c.username ? '@' + c.username : undefined })),
+)
+const pickedIds = (u: any): number[] => (u.channels ?? []).map((c: any) => c.id)
+const saveAccess = (ids: number[]) =>
+  run(async () => {
+    await api(`/users/${accessFor.value.id}/channels`, { method: 'PUT', body: { channel_ids: ids } })
+    accessFor.value = null
+  })
+
 onMounted(() => run(async () => {}))
 </script>
 
@@ -58,9 +71,21 @@ onMounted(() => run(async () => {}))
 
     <p v-if="error" class="error">{{ error }}</p>
 
+    <div v-if="accessFor" class="card">
+      <AccessPicker
+        :key="accessFor.id"
+        :title="'Каналы пользователя ' + accessFor.name"
+        :options="channelOptions"
+        :selected="pickedIds(accessFor)"
+        empty="Каналов пока нет. Подключите канал на странице «Каналы»."
+        @save="saveAccess"
+        @cancel="accessFor = null"
+      />
+    </div>
+
     <div class="card table-wrap">
       <table class="stack">
-        <thead><tr><th>Имя</th><th>Email</th><th>Роль</th><th>Создан</th><th /></tr></thead>
+        <thead><tr><th>Имя</th><th>Email</th><th>Роль</th><th>Каналы</th><th>Создан</th><th /></tr></thead>
         <tbody>
           <tr v-for="u in users" :key="u.id">
             <td data-label="Имя">{{ u.name }}</td>
@@ -71,8 +96,14 @@ onMounted(() => run(async () => {}))
                 <option value="admin">Администратор</option>
               </select>
             </td>
+            <td class="wrap" data-label="Каналы">
+              <span v-if="u.role === 'admin'" class="muted">все каналы</span>
+              <span v-else-if="!u.channels.length" class="warn">нет доступа</span>
+              <span v-else class="chips-inline"><span v-for="c in u.channels" :key="c.id" class="tagchip">{{ c.title }}</span></span>
+            </td>
             <td data-label="Создан">{{ fmtDate(u.created_at) }}</td>
             <td class="num actions-cell">
+              <button v-if="u.role === 'editor'" :disabled="busy" @click="accessFor = u">Каналы</button>
               <button :disabled="busy" @click="resetPassword(u)">Сбросить пароль</button>
               <button class="danger" :disabled="busy || u.id === me?.id" @click="remove(u)">Удалить</button>
             </td>
@@ -80,6 +111,9 @@ onMounted(() => run(async () => {}))
         </tbody>
       </table>
     </div>
-    <p class="muted">Редактор работает с постами и видит метрики. Администратор дополнительно подключает каналы и управляет пользователями.</p>
+    <p class="muted">
+      Администратор видит все каналы и управляет пользователями. Редактор работает только с каналами, которые за ним закреплены:
+      он видит их посты и метрики, остальные каналы для него скрыты.
+    </p>
   </section>
 </template>

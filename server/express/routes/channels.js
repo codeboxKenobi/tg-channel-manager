@@ -3,16 +3,24 @@ import { q } from '../db.js';
 import { bot, memberCount } from '../bot.js';
 import { httpError } from '../http.js';
 import { requireRole } from '../auth.js';
+import { accessibleChannelIds, assertChannelAccess, setChannelUsers } from '../access.js';
 
 const r = Router();
 
-r.get('/', async (_req, res) => {
-  const { rows } = await q(`
-    select c.*,
-           count(p.id) filter (where p.status = 'published')::int as published_count,
-           count(p.id) filter (where p.status in ('draft', 'scheduled'))::int as pending_count
-    from channels c left join posts p on p.channel_id = c.id
-    group by c.id order by c.id`);
+r.get('/', async (req, res) => {
+  const { rows } = await q(
+    `select c.*,
+            count(p.id) filter (where p.status = 'published')::int as published_count,
+            count(p.id) filter (where p.status in ('draft', 'scheduled'))::int as pending_count,
+            coalesce((select json_agg(json_build_object('id', u.id, 'name', u.name) order by u.name)
+                      from channel_users cu join users u on u.id = cu.user_id
+                      where cu.channel_id = c.id), '[]'::json) as assigned_users
+     from channels c left join posts p on p.channel_id = c.id
+     where $1::int[] is null or c.id = any($1::int[])
+     group by c.id order by c.id`,
+    [await accessibleChannelIds(req.user)],
+  );
+  if (req.user.role !== 'admin') rows.forEach((r) => delete r.assigned_users);
   res.json(rows);
 });
 
@@ -58,6 +66,7 @@ r.post('/:id/refresh', async (req, res) => {
   if (!bot) throw httpError('BOT_TOKEN не задан', 503);
   const { rows: [c] } = await q('select * from channels where id = $1', [req.params.id]);
   if (!c) throw httpError('Канал не найден', 404);
+  await assertChannelAccess(req.user, c.id);
   const info = await bot.telegram.getChat(c.tg_chat_id);
   const n = await memberCount(c.tg_chat_id);
   const { rows: [row] } = await q(
@@ -72,6 +81,14 @@ r.post('/:id/refresh', async (req, res) => {
 r.delete('/:id', requireRole('admin'), async (req, res) => {
   const { rowCount } = await q('delete from channels where id = $1', [req.params.id]);
   if (!rowCount) throw httpError('Канал не найден', 404);
+  res.status(204).end();
+});
+
+// Закрепление канала за пользователями (полная замена списка)
+r.put('/:id/users', requireRole('admin'), async (req, res) => {
+  const { rowCount } = await q('select 1 from channels where id = $1', [req.params.id]);
+  if (!rowCount) throw httpError('Канал не найден', 404);
+  await setChannelUsers(Number(req.params.id), req.body?.user_ids);
   res.status(204).end();
 });
 

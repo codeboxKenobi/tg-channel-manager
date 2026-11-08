@@ -2,13 +2,20 @@ import { Router } from 'express';
 import { q } from '../db.js';
 import { httpError } from '../http.js';
 import { assertPassword, cleanUserInput, hashPassword, requireRole } from '../auth.js';
+import { setUserChannels } from '../access.js';
 
 const r = Router();
 const ROLES = ['admin', 'editor'];
 r.use(requireRole('admin'));
 
 r.get('/', async (_req, res) => {
-  const { rows } = await q('select id, email, name, role, created_at from users order by id');
+  const { rows } = await q(
+    `select u.id, u.email, u.name, u.role, u.created_at,
+            coalesce((select json_agg(json_build_object('id', c.id, 'title', c.title) order by c.title)
+                      from channel_users cu join channels c on c.id = cu.channel_id
+                      where cu.user_id = u.id), '[]'::json) as channels
+     from users u order by u.id`,
+  );
   res.json(rows);
 });
 
@@ -49,6 +56,14 @@ r.delete('/:id', async (req, res) => {
   if (Number(req.params.id) === req.user.id) throw httpError('Нельзя удалить самого себя');
   const { rowCount } = await q('delete from users where id = $1', [req.params.id]);
   if (!rowCount) throw httpError('Пользователь не найден', 404);
+  res.status(204).end();
+});
+
+// Закрепление каналов за пользователем (полная замена списка)
+r.put('/:id/channels', async (req, res) => {
+  const { rowCount } = await q('select 1 from users where id = $1', [req.params.id]);
+  if (!rowCount) throw httpError('Пользователь не найден', 404);
+  await setUserChannels(Number(req.params.id), req.body?.channel_ids);
   res.status(204).end();
 });
 

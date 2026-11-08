@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const api = useApi()
+const { isAdmin } = useAuth()
 const channels = ref<any[]>([])
 const posts = ref<any[]>([])
 const channelId = ref<number | ''>('')
@@ -85,7 +86,7 @@ watch(channelId, () => load().catch((e) => (error.value = e.message)))
       </div>
     </div>
 
-    <p v-if="!channels.length" class="muted">Сначала подключите канал на странице «Каналы».</p>
+    <p v-if="!channels.length" class="muted">{{ isAdmin ? 'Сначала подключите канал на странице «Каналы».' : 'Вам пока не назначены каналы. Обратитесь к администратору.' }}</p>
     <p v-if="error" class="error">{{ error }}</p>
 
     <div v-if="creating || editing" class="card">

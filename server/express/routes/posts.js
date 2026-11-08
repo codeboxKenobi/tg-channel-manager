@@ -4,6 +4,7 @@ import { bot } from '../bot.js';
 import { publishById } from '../scheduler.js';
 import { httpError } from '../http.js';
 import { localUpload, removeUploadIfUnused } from '../uploads.js';
+import { accessibleChannelIds, assertChannelAccess } from '../access.js';
 
 const r = Router();
 
@@ -42,8 +43,9 @@ r.get('/', async (req, res) => {
      from posts p join channels c on c.id = p.channel_id left join users u on u.id = p.created_by
      where ($1::post_status[] is null or p.status = any($1::post_status[]))
        and ($2::int is null or p.channel_id = $2)
+       and ($3::int[] is null or p.channel_id = any($3::int[]))
      order by coalesce(p.published_at, p.scheduled_at, p.created_at) desc`,
-    [statuses, channelId],
+    [statuses, channelId, await accessibleChannelIds(req.user)],
   );
   res.json(rows);
 });
@@ -51,11 +53,13 @@ r.get('/', async (req, res) => {
 r.get('/:id', async (req, res) => {
   const { rows: [row] } = await q('select * from posts where id = $1', [req.params.id]);
   if (!row) throw httpError('Пост не найден', 404);
+  await assertChannelAccess(req.user, row.channel_id);
   res.json(row);
 });
 
 r.post('/', async (req, res) => {
   const p = parse(req.body);
+  await assertChannelAccess(req.user, p.channel_id);
   const { rows: [row] } = await q(
     `insert into posts (channel_id, title, content, media_url, parse_mode, scheduled_at, status, created_by)
      values ($1, $2, $3, $4, $5, $6, $7, $8) returning *`,
@@ -67,8 +71,10 @@ r.post('/', async (req, res) => {
 // scheduled_at задан → пост ставится в график, пусто → остаётся черновиком
 r.put('/:id', async (req, res) => {
   const p = parse(req.body);
-  const { rows: [cur] } = await q('select status, media_url from posts where id = $1', [req.params.id]);
+  const { rows: [cur] } = await q('select status, media_url, channel_id from posts where id = $1', [req.params.id]);
   if (!cur) throw httpError('Пост не найден', 404);
+  await assertChannelAccess(req.user, cur.channel_id);
+  await assertChannelAccess(req.user, p.channel_id);
   if (['published', 'publishing'].includes(cur.status)) throw httpError('Опубликованный пост редактировать нельзя', 409);
   const { rows: [row] } = await q(
     `update posts set channel_id = $2, title = $3, content = $4, media_url = $5, parse_mode = $6,
@@ -82,6 +88,9 @@ r.put('/:id', async (req, res) => {
 
 r.post('/:id/publish', async (req, res) => {
   if (!bot) throw httpError('BOT_TOKEN не задан: публикация недоступна', 503);
+  const { rows: [pre] } = await q('select channel_id from posts where id = $1', [req.params.id]);
+  if (!pre) throw httpError('Пост не найден', 404);
+  await assertChannelAccess(req.user, pre.channel_id);
   const { rows } = await q(
     `update posts set status = 'publishing', updated_at = now()
      where id = $1 and status in ('draft', 'scheduled', 'failed') returning id`,
@@ -96,10 +105,11 @@ r.post('/:id/publish', async (req, res) => {
 // ?tg=1 — дополнительно удалить сообщение в канале
 r.delete('/:id', async (req, res) => {
   const { rows: [post] } = await q(
-    'select p.tg_message_id, p.status, p.media_url, c.tg_chat_id from posts p join channels c on c.id = p.channel_id where p.id = $1',
+    'select p.tg_message_id, p.status, p.media_url, p.channel_id, c.tg_chat_id from posts p join channels c on c.id = p.channel_id where p.id = $1',
     [req.params.id],
   );
   if (!post) throw httpError('Пост не найден', 404);
+  await assertChannelAccess(req.user, post.channel_id);
   if (req.query.tg === '1' && bot && post.status === 'published' && post.tg_message_id) {
     await bot.telegram.deleteMessage(post.tg_chat_id, Number(post.tg_message_id)).catch(() => {});
   }

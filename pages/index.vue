@@ -2,13 +2,16 @@
 const api = useApi()
 const { isAdmin } = useAuth()
 const channels = ref<any[]>([])
+const editors = ref<any[]>([])
 const chat = ref('')
 const title = ref('')
 const error = ref('')
 const busy = ref(false)
+const accessFor = ref<number | null>(null)
 
 async function load() {
   channels.value = await api('/channels')
+  if (isAdmin.value) editors.value = (await api<any[]>('/users')).filter((u) => u.role === 'editor')
 }
 async function run(fn: () => Promise<any>) {
   error.value = ''
@@ -33,8 +36,15 @@ const toggle = (c: any) =>
   run(() => api(`/channels/${c.id}`, { method: 'PUT', body: { title: c.title, description: c.description, is_active: !c.is_active } }))
 const refresh = (c: any) => run(() => api(`/channels/${c.id}/refresh`, { method: 'POST' }))
 const remove = (c: any) =>
-  confirm(`Удалить канал «${c.title}» вместе со всеми его постами?`) &&
-  run(() => api(`/channels/${c.id}`, { method: 'DELETE' }))
+  confirm(`Удалить канал «${c.title}» вместе со всеми его постами?`) ? run(() => api(`/channels/${c.id}`, { method: 'DELETE' })) : undefined
+
+const editorOptions = computed(() => editors.value.map((u) => ({ id: u.id, label: u.name, hint: u.email })))
+const assignedIds = (c: any): number[] => (c.assigned_users ?? []).map((u: any) => u.id)
+const saveAccess = (c: any, ids: number[]) =>
+  run(async () => {
+    await api(`/channels/${c.id}/users`, { method: 'PUT', body: { user_ids: ids } })
+    accessFor.value = null
+  })
 
 onMounted(() => run(async () => {}))
 </script>
@@ -56,7 +66,9 @@ onMounted(() => run(async () => {}))
     </form>
 
     <p v-if="error" class="error">{{ error }}</p>
-    <p v-if="!channels.length" class="muted">{{ isAdmin ? 'Каналов пока нет. Подключите первый выше.' : 'Каналов пока нет. Попросите администратора подключить канал.' }}</p>
+    <p v-if="!channels.length" class="muted">
+      {{ isAdmin ? 'Каналов пока нет. Подключите первый выше.' : 'Вам пока не назначены каналы. Обратитесь к администратору.' }}
+    </p>
 
     <article v-for="c in channels" :key="c.id" class="card">
       <div class="row between">
@@ -71,11 +83,27 @@ onMounted(() => run(async () => {}))
       <p style="margin: 8px 0 0">
         Опубликовано: <b>{{ c.published_count }}</b> · В подготовке: <b>{{ c.pending_count }}</b>
       </p>
+      <p v-if="isAdmin" class="muted" style="margin: 8px 0 0">
+        Доступ:
+        <span v-if="!c.assigned_users.length">только администраторы</span>
+        <span v-else class="chips-inline"><span v-for="u in c.assigned_users" :key="u.id" class="tagchip">{{ u.name }}</span></span>
+      </p>
       <div class="actions">
         <button :disabled="busy" @click="refresh(c)">Обновить данные</button>
+        <button v-if="isAdmin" :disabled="busy" @click="accessFor = accessFor === c.id ? null : c.id">Доступ</button>
         <button v-if="isAdmin" :disabled="busy" @click="toggle(c)">{{ c.is_active ? 'Отключить публикации' : 'Включить публикации' }}</button>
         <button v-if="isAdmin" class="danger" :disabled="busy" @click="remove(c)">Удалить</button>
       </div>
+      <AccessPicker
+        v-if="isAdmin && accessFor === c.id"
+        :key="c.id"
+        title="Кому доступен канал"
+        :options="editorOptions"
+        :selected="assignedIds(c)"
+        empty="Редакторов пока нет. Добавьте их на странице «Пользователи»."
+        @save="(ids) => saveAccess(c, ids)"
+        @cancel="accessFor = null"
+      />
     </article>
   </section>
 </template>

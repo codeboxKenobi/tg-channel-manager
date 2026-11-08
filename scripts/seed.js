@@ -51,12 +51,15 @@ for (const u of demoUsers) {
   userIds.push(row.id);
 }
 
+let assigned = 0;
 for (const c of channels) {
   const { rows: [ch] } = await q(
     `insert into channels (tg_chat_id, title, username, description, subscribers_count)
      values ($1, $2, $3, $4, $5) returning id`,
     [c.tg, c.title, c.username, c.description, c.subs],
   );
+  // редактор закреплён за первыми двумя каналами, третий видит только администратор
+  if (assigned++ < 2) await q('insert into channel_users (channel_id, user_id) values ($1, $2)', [ch.id, userIds[1]]);
 
   // подписчики: 30 дневных снимков с ростом
   await q(
