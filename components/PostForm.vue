@@ -16,6 +16,7 @@ const form = reactive({
 
 const isUploaded = computed(() => form.media_url.startsWith(UPLOAD_PREFIX))
 const showPreview = computed(() => isUploaded.value || /^https?:\/\//i.test(form.media_url))
+const isVideo = computed(() => isVideoUrl(form.media_url))
 const limit = computed(() => (form.media_url ? 1024 : 4096))
 const uploading = ref(false)
 const uploadError = ref('')
@@ -71,19 +72,20 @@ function submit() {
 
     <div class="row" style="align-items: flex-start">
       <div style="flex: 2; min-width: 220px">
-        <label>Ссылка на изображение (необязательно)</label>
+        <label>Ссылка на изображение или видео (необязательно)</label>
         <input v-if="!isUploaded" v-model="form.media_url" type="url" placeholder="https://…" />
-        <input v-else value="Загружено с устройства" readonly disabled />
+        <input v-else :value="isVideo ? 'Видео сохранено' : 'Загружено с устройства'" readonly disabled />
 
         <div class="upload">
           <label class="filebtn" :class="{ busy: uploading }">
             {{ uploading ? 'Загрузка…' : 'Загрузить с устройства' }}
             <input type="file" accept="image/*" :disabled="uploading" @change="onFile" />
           </label>
-          <button v-if="form.media_url" type="button" class="danger" @click="form.media_url = ''">Убрать картинку</button>
+          <button v-if="form.media_url" type="button" class="danger" @click="form.media_url = ''">{{ isVideo ? 'Убрать видео' : 'Убрать картинку' }}</button>
         </div>
         <p v-if="uploadError" class="error" style="margin: 8px 0 0">{{ uploadError }}</p>
-        <img v-if="showPreview" :key="form.media_url" :src="form.media_url" class="preview" alt="Предпросмотр картинки" />
+        <video v-if="showPreview && isVideo" :key="form.media_url" :src="form.media_url" class="preview" controls playsinline preload="metadata" />
+        <img v-else-if="showPreview" :key="form.media_url" :src="form.media_url" class="preview" alt="Предпросмотр картинки" />
       </div>
       <div style="flex: 1; min-width: 160px">
         <label>Форматирование</label>

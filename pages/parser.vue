@@ -206,7 +206,7 @@ onMounted(async () => {
             {{ parsing ? 'Парсинг…' : `Спарсить выбранные (${selected.length})` }}
           </button>
         </div>
-        <p class="muted" style="margin: 8px 0 0; font-size: 13px">Чем больше постов, тем дольше загрузка. Уже сохранённые посты не дублируются. Из текста удаляются ссылки, @упоминания, хештеги и рекламные подписи; посты без текста пропускаются.</p>
+        <p class="muted" style="margin: 8px 0 0; font-size: 13px">Чем больше постов, тем дольше загрузка. Уже сохранённые посты не дублируются. Берутся текст, фото и видео. Из текста удаляются ссылки, @упоминания, хештеги и рекламные подписи; посты без текста пропускаются.</p>
       </template>
     </div>
 
@@ -240,13 +240,14 @@ onMounted(async () => {
           <strong>{{ p.source_title || p.source_username }}</strong>
           <span class="muted"> @{{ p.source_username }}</span>
         </div>
-        <span class="muted">{{ fmtDate(p.posted_at) }}</span>
+        <span class="muted">{{ p.media_type === 'video' ? '🎬 видео · ' : '' }}{{ fmtDate(p.posted_at) }}</span>
       </div>
       <p class="post-content">{{ shown(p) }}</p>
       <button v-if="p.content.length > CLAMP" type="button" class="link" @click="toggleText(p.id)">
         {{ expanded.includes(p.id) ? 'Свернуть' : 'Показать полностью' }}
       </button>
-      <img v-if="p.media_url" :src="p.media_url" class="thumb" alt="" loading="lazy" referrerpolicy="no-referrer" />
+      <video v-if="p.media_url && p.media_type === 'video'" :src="p.media_url" class="thumb" controls playsinline preload="metadata" />
+      <img v-else-if="p.media_url" :src="p.media_url" class="thumb" alt="" loading="lazy" referrerpolicy="no-referrer" />
       <div class="actions">
         <button v-if="!p.draft_post_id" class="primary" :disabled="!targetId || creating.includes(p.id)" @click="makeDraft(p)">
           {{ creating.includes(p.id) ? 'Формирую…' : 'Сформировать пост' }}

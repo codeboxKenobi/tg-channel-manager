@@ -3,7 +3,7 @@ import { q } from '../db.js';
 import { httpError } from '../http.js';
 import { assertChannelAccess } from '../access.js';
 import { removeUploadIfUnused } from '../uploads.js';
-import { clampLimit, downloadImage, normalizeChannel, scrapeChannel, stripLinks } from '../parser.js';
+import { clampLimit, downloadMedia, normalizeChannel, scrapeChannel, stripLinks } from '../parser.js';
 
 const r = Router();
 
@@ -17,12 +17,13 @@ const ints = (list) => [...new Set((Array.isArray(list) ? list : []).map(Number)
 async function storePosts(sourceId, posts) {
   if (!posts.length) return 0;
   const { rows } = await q(
-    `insert into parsed_posts (source_id, tg_post_id, content, media_url, posted_at)
-     select $1::int, t.id, t.content, t.media_url, t.posted_at
-     from unnest($2::int[], $3::text[], $4::text[], $5::timestamptz[]) as t(id, content, media_url, posted_at)
-     on conflict (source_id, tg_post_id) do update set content = excluded.content, media_url = excluded.media_url
+    `insert into parsed_posts (source_id, tg_post_id, content, media_url, media_type, posted_at)
+     select $1::int, t.id, t.content, t.media_url, t.media_type, t.posted_at
+     from unnest($2::int[], $3::text[], $4::text[], $5::text[], $6::timestamptz[]) as t(id, content, media_url, media_type, posted_at)
+     on conflict (source_id, tg_post_id) do update
+       set content = excluded.content, media_url = excluded.media_url, media_type = excluded.media_type
      returning (xmax = 0) as inserted`,
-    [sourceId, posts.map((p) => p.id), posts.map((p) => p.content), posts.map((p) => p.media_url), posts.map((p) => p.posted_at)],
+    [sourceId, posts.map((p) => p.id), posts.map((p) => p.content), posts.map((p) => p.media_url), posts.map((p) => p.media_type), posts.map((p) => p.posted_at)],
   );
   return rows.filter((x) => x.inserted).length;
 }
@@ -113,7 +114,7 @@ r.get('/posts', async (req, res) => {
   const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 30));
   const offset = Math.max(0, Number(req.query.offset) || 0);
   const { rows } = await q(
-    `select pp.id, pp.source_id, pp.tg_post_id, pp.content, pp.media_url, pp.posted_at, pp.draft_post_id,
+    `select pp.id, pp.source_id, pp.tg_post_id, pp.content, pp.media_url, pp.media_type, pp.posted_at, pp.draft_post_id,
             s.username as source_username, s.title as source_title, p.status as draft_status,
             count(*) over()::int as total
      from parsed_posts pp
@@ -153,13 +154,16 @@ r.post('/posts/:id/draft', async (req, res) => {
 
   let media = pp.media_url;
   let note = null;
+  const what = pp.media_type === 'video' ? 'Видео' : 'Картинка';
   if (media && content.length > 1024) {
-    media = null; // подпись к фото в Telegram — не больше 1024 символов
-    note = 'Картинка не добавлена: текст длиннее 1024 символов (лимит подписи к фото в Telegram)';
+    media = null; // подпись к фото и видео в Telegram — не больше 1024 символов
+    note = `${what} не добавлено: текст длиннее 1024 символов (лимит подписи в Telegram)`;
   } else if (media) {
-    // картинка сохраняется как своя локальная копия; ссылку на CDN в черновик не кладём
-    media = await downloadImage(media).catch(() => null);
-    if (!media) note = 'Картинку скачать не удалось, добавьте её вручную';
+    // файл сохраняется локально; ссылку на CDN в черновик не кладём
+    media = await downloadMedia(media).catch((e) => {
+      note = `${what} не добавлено: ${e.message}. Добавьте вручную`;
+      return null;
+    });
   }
 
   const { rows: [post] } = await q(

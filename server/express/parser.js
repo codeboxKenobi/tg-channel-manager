@@ -1,6 +1,9 @@
 import crypto from 'node:crypto';
 import path from 'node:path';
-import { writeFile } from 'node:fs/promises';
+import { createWriteStream } from 'node:fs';
+import { open, unlink } from 'node:fs/promises';
+import { Readable, Transform } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { httpError } from './http.js';
 import { UPLOAD_DIR, URL_PREFIX, ensureUploadDir } from './uploads.js';
 
@@ -155,6 +158,8 @@ export function stripLinks(text) {
 /** Текст поста для сохранения: без рекламных блоков, ссылок, упоминаний и хештегов. */
 export const cleanPostHtml = (html) => stripLinks(promoClean(htmlToText(html, { mark: true })));
 
+const absolute = (u) => (u.startsWith('//') ? `https:${u}` : u);
+
 export function isTelegramCdn(url) {
   try {
     const u = new URL(url);
@@ -188,12 +193,15 @@ export function parsePage(html, username) {
     const content = textTag ? cleanPostHtml(divInner(chunk, textTag.index + textTag[0].length)) : '';
     if (!content) continue; // фото/видео без подписи в черновик не превратить — текст обязателен
 
-    const photo = chunk.match(/tgme_widget_message_photo_wrap[^>]*?style="[^"]*?background-image:\s*url\((['"]?)([^'")]+)\1\)/);
-    const mediaUrl = photo ? decode(photo[2]) : null;
     const date = chunk.match(/<time[^>]*\bdatetime="([^"]+)"/)?.[1];
     const posted = date && !Number.isNaN(Date.parse(date)) ? new Date(date).toISOString() : null;
 
-    posts.push({ id, content, media_url: mediaUrl && isTelegramCdn(mediaUrl) ? mediaUrl : null, posted_at: posted });
+    // видео: <video src="…mp4"> (обычные, круглые, гифки); если t.me файл не отдаёт, берём только текст
+    const video = absolute(decode(chunk.match(/<video\b[^>]*?\bsrc="([^"]+)"/i)?.[1] ?? ''));
+    const photo = absolute(decode(chunk.match(/tgme_widget_message_photo_wrap[^>]*?style="[^"]*?background-image:\s*url\((['"]?)([^'")]+)\1\)/)?.[2] ?? ''));
+    const media = isTelegramCdn(video) ? { media_url: video, media_type: 'video' } : isTelegramCdn(photo) ? { media_url: photo, media_type: 'photo' } : { media_url: null, media_type: null };
+
+    posts.push({ id, content, ...media, posted_at: posted });
   }
   return { title, isChannel, ids, posts };
 }
@@ -244,17 +252,47 @@ export async function scrapeChannel(username, { limit = PAGE_SIZE } = {}) {
   return { title, posts: [...found.values()] };
 }
 
-/** Скачивает картинку поста в каталог загрузок приложения (CDN-ссылки со временем протухают). */
-export async function downloadImage(url) {
-  if (!isTelegramCdn(url)) throw new Error('Недопустимый адрес картинки');
-  const res = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(20_000) });
-  if (!res.ok) throw new Error(`Картинка недоступна (${res.status})`);
-  const ext = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[(res.headers.get('content-type') || '').split(';')[0].trim()];
-  if (!ext) throw new Error('Неподдерживаемый тип картинки');
-  const buf = Buffer.from(await res.arrayBuffer());
-  if (!buf.length || buf.length > 10 * 1024 * 1024) throw new Error('Картинка пустая или больше 10 МБ');
+// тип файла → [расширение, максимальный размер в МБ]. Для видео — лимит Bot API на загрузку файла (50 МБ)
+const MEDIA_TYPES = { 'image/jpeg': ['jpg', 10], 'image/png': ['png', 10], 'image/webp': ['webp', 10], 'video/mp4': ['mp4', 50] };
+
+// проверка сигнатуры файла, а не только заголовка Content-Type
+function looksLike(head, ext) {
+  if (ext === 'jpg') return head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff;
+  if (ext === 'png') return head.subarray(0, 4).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+  if (ext === 'mp4') return head.subarray(4, 8).toString('latin1') === 'ftyp';
+  return head.subarray(0, 4).toString('latin1') === 'RIFF' && head.subarray(8, 12).toString('latin1') === 'WEBP';
+}
+
+/** Скачивает фото или видео поста в каталог загрузок приложения (CDN-ссылки со временем протухают). Возвращает /api/uploads/… */
+export async function downloadMedia(url) {
+  if (!isTelegramCdn(url)) throw new Error('Недопустимый адрес файла');
+  const res = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(180_000) });
+  if (!res.ok || !res.body) throw new Error(`Файл недоступен (${res.status})`);
+  const spec = MEDIA_TYPES[(res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase()];
+  if (!spec) throw new Error('Неподдерживаемый тип файла');
+  const [ext, maxMb] = spec;
+  const max = maxMb * 1024 * 1024;
+  if (Number(res.headers.get('content-length')) > max) throw new Error(`Файл больше ${maxMb} МБ`);
+
   await ensureUploadDir();
   const name = `${crypto.randomBytes(16).toString('hex')}.${ext}`;
-  await writeFile(path.join(UPLOAD_DIR, name), buf);
+  const file = path.join(UPLOAD_DIR, name);
+  let size = 0;
+  const limit = new Transform({
+    transform(chunk, _enc, cb) {
+      size += chunk.length;
+      cb(size > max ? new Error(`Файл больше ${maxMb} МБ`) : null, chunk);
+    },
+  });
+  try {
+    await pipeline(Readable.fromWeb(res.body), limit, createWriteStream(file)); // потоком на диск, без загрузки в память
+    const fh = await open(file);
+    const head = Buffer.alloc(12);
+    await fh.read(head, 0, 12, 0).finally(() => fh.close());
+    if (!size || !looksLike(head, ext)) throw new Error('Файл повреждён или имеет другой формат');
+  } catch (e) {
+    await unlink(file).catch(() => {});
+    throw e;
+  }
   return URL_PREFIX + name;
 }

@@ -104,7 +104,8 @@ watch(channelId, () => load().catch((e) => (error.value = e.message)))
         <span class="badge" :class="p.status">{{ STATUS[p.status] }}</span>
       </div>
       <p class="post-content">{{ p.content }}</p>
-      <img v-if="p.media_url" :src="p.media_url" class="thumb" alt="" loading="lazy" @error="($event.target as HTMLImageElement).style.display = 'none'" />
+      <video v-if="isVideoUrl(p.media_url)" :src="p.media_url" class="thumb" controls playsinline preload="metadata" />
+      <img v-else-if="p.media_url" :src="p.media_url" class="thumb" alt="" loading="lazy" @error="($event.target as HTMLImageElement).style.display = 'none'" />
       <p v-if="p.scheduled_at" class="muted" style="margin: 0">Публикация: {{ fmtDate(p.scheduled_at) }}</p>
       <p v-if="p.author_name" class="muted" style="margin: 4px 0 0">Автор: {{ p.author_name }}</p>
       <p v-if="p.error" class="error" style="margin: 4px 0 0">{{ p.error }}</p>

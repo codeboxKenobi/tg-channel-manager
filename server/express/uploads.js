@@ -5,7 +5,10 @@ import { q } from './db.js';
 // В Docker каталог монтируется как volume (UPLOAD_DIR=/data/uploads)
 export const UPLOAD_DIR = path.resolve(process.env.UPLOAD_DIR || './data/uploads');
 export const URL_PREFIX = '/api/uploads/';
-export const NAME_RE = /^[a-f0-9]{32}\.(jpg|png|webp)$/;
+export const NAME_RE = /^[a-f0-9]{32}\.(jpg|png|webp|mp4)$/;
+
+/** Видео определяем по расширению: наши загрузки всегда называются <hash>.<ext>. */
+export const isVideoUrl = (url) => /\.mp4(?:[?#].*)?$/i.test(url ?? '');
 
 export const ensureUploadDir = () => mkdir(UPLOAD_DIR, { recursive: true });
 

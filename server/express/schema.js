@@ -101,4 +101,7 @@ create table if not exists parsed_posts (
 );
 create index if not exists parsed_posts_source_idx on parsed_posts (source_id, posted_at desc);
 create index if not exists parsed_posts_posted_idx on parsed_posts (posted_at desc);
+
+-- тип медиа спарсенного поста: photo | video
+alter table parsed_posts add column if not exists media_type text;
 `;

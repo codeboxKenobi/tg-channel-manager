@@ -14,9 +14,9 @@ function parse(body) {
   if (!title?.trim()) throw httpError('Укажите заголовок');
   if (!content?.trim()) throw httpError('Текст поста не может быть пустым');
   if (content.length > (media_url ? 1024 : 4096)) {
-    throw httpError(media_url ? 'Подпись к фото — не более 1024 символов' : 'Текст — не более 4096 символов');
+    throw httpError(media_url ? 'Подпись к фото или видео — не более 1024 символов' : 'Текст — не более 4096 символов');
   }
-  if (media_url && !/^https?:\/\//i.test(media_url) && !localUpload(media_url)) throw httpError('Некорректная ссылка на изображение');
+  if (media_url && !/^https?:\/\//i.test(media_url) && !localUpload(media_url)) throw httpError('Некорректная ссылка на файл');
   if (parse_mode && !['HTML', 'MarkdownV2'].includes(parse_mode)) throw httpError('Некорректный parse_mode');
   let when = null;
   if (scheduled_at) {

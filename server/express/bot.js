@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Telegraf, Markup } from 'telegraf';
 import { q } from './db.js';
-import { localUpload } from './uploads.js';
+import { isVideoUrl, localUpload } from './uploads.js';
 
 const likeKeyboard = (postId, count) =>
   Markup.inlineKeyboard([[Markup.button.callback(`👍 ${count}`, `like:${postId}`)]]);
@@ -34,28 +34,30 @@ function createBot() {
 
 export const bot = process.env.BOT_TOKEN ? (globalThis.__tgmBot ??= createBot()) : null;
 
-const MIME = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
+const MIME = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp', mp4: 'video/mp4' };
 
-/** Фото из файла: multipart с известной длиной (как у curl), без потоковой передачи. */
-async function sendPhotoFile(chatId, file, { caption, parse_mode, reply_markup }) {
+/** Фото или видео (.mp4) из файла: multipart с известной длиной (как у curl), без потоковой передачи. */
+async function sendMediaFile(chatId, file, { caption, parse_mode, reply_markup }) {
   const form = new FormData();
   form.append('chat_id', String(chatId));
   if (caption) form.append('caption', caption);
   if (parse_mode) form.append('parse_mode', parse_mode);
   form.append('reply_markup', JSON.stringify(reply_markup));
   const ext = path.extname(file).slice(1);
-  form.append('photo', new Blob([await readFile(file)], { type: MIME[ext] || 'image/jpeg' }), path.basename(file));
+  const video = ext === 'mp4';
+  if (video) form.append('supports_streaming', 'true');
+  form.append(video ? 'video' : 'photo', new Blob([await readFile(file)], { type: MIME[ext] || 'image/jpeg' }), path.basename(file));
 
   let res;
   try {
-    res = await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendPhoto`, {
+    res = await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/${video ? 'sendVideo' : 'sendPhoto'}`, {
       method: 'POST',
       body: form,
-      signal: AbortSignal.timeout(60_000),
+      signal: AbortSignal.timeout(video ? 300_000 : 60_000),
     });
   } catch (e) {
     // текст ошибки без URL, чтобы токен не попал в логи и в интерфейс
-    throw new Error(`Не удалось отправить фото: ${e.cause?.code || e.cause?.message || e.message}`);
+    throw new Error(`Не удалось отправить ${video ? 'видео' : 'фото'}: ${e.cause?.code || e.cause?.message || e.message}`);
   }
   const data = await res.json().catch(() => ({}));
   if (!data.ok) throw new Error(data.description || `Telegram ответил ${res.status}`);
@@ -69,12 +71,13 @@ export async function publishPost(post) {
 
   const file = localUpload(post.media_url);
   if (file) {
-    return sendPhotoFile(post.tg_chat_id, file, { caption: post.content, ...parse, reply_markup: keyboard.reply_markup });
+    return sendMediaFile(post.tg_chat_id, file, { caption: post.content, ...parse, reply_markup: keyboard.reply_markup });
   }
 
   const extra = { ...parse, ...keyboard };
+  const send = isVideoUrl(post.media_url) ? 'sendVideo' : 'sendPhoto';
   const msg = post.media_url
-    ? await bot.telegram.sendPhoto(post.tg_chat_id, post.media_url, { caption: post.content, ...extra })
+    ? await bot.telegram[send](post.tg_chat_id, post.media_url, { caption: post.content, ...extra })
     : await bot.telegram.sendMessage(post.tg_chat_id, post.content, extra);
   return msg.message_id;
 }
