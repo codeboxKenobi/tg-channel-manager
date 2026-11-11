@@ -27,13 +27,13 @@ async function run(fn: () => Promise<any>) {
 
 const create = () =>
   run(async () => {
-    await api('/users', { method: 'POST', body: { ...form } })
+    await api('/users', { method: 'POST', body: { email: form.email, name: form.name, role: form.role, ...(await sealFields({ password: form.password })) } })
     Object.assign(form, { email: '', name: '', password: '', role: 'editor' })
   })
 const setRole = (u: any, role: string) => run(() => api(`/users/${u.id}`, { method: 'PUT', body: { name: u.name, role } }))
 const resetPassword = (u: any) => {
   const password = prompt(`Новый пароль для ${u.email} (не короче 8 символов)`)
-  return password ? run(() => api(`/users/${u.id}`, { method: 'PUT', body: { name: u.name, role: u.role, password } })) : undefined
+  return password ? run(async () => api(`/users/${u.id}`, { method: 'PUT', body: { name: u.name, role: u.role, ...(await sealFields({ password })) } })) : undefined
 }
 const remove = (u: any) =>
   confirm(`Удалить пользователя ${u.email}?`) ? run(() => api(`/users/${u.id}`, { method: 'DELETE' })) : undefined

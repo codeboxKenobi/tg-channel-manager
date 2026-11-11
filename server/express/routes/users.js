@@ -3,6 +3,7 @@ import { q } from '../db.js';
 import { httpError } from '../http.js';
 import { assertPassword, cleanUserInput, hashPassword, requireRole } from '../auth.js';
 import { setUserChannels } from '../access.js';
+import { openPasswords } from '../sealed.js';
 
 const r = Router();
 const ROLES = ['admin', 'editor'];
@@ -20,7 +21,8 @@ r.get('/', async (_req, res) => {
 });
 
 r.post('/', async (req, res) => {
-  const { email, name, password } = cleanUserInput(req.body);
+  const { password: plain } = openPasswords(req.body, ['password']);
+  const { email, name, password } = cleanUserInput({ ...req.body, password: plain });
   const role = req.body.role ?? 'editor';
   if (!ROLES.includes(role)) throw httpError('Некорректная роль');
   const { rows: [u] } = await q(
@@ -33,7 +35,8 @@ r.post('/', async (req, res) => {
 
 r.put('/:id', async (req, res) => {
   const id = Number(req.params.id);
-  const { name, role, password } = req.body ?? {};
+  const { name, role } = req.body ?? {};
+  const { password } = openPasswords(req.body, ['password'], { optional: true });
   if (!name?.trim()) throw httpError('Укажите имя');
   if (!ROLES.includes(role)) throw httpError('Некорректная роль');
   if (id === req.user.id && role !== 'admin') throw httpError('Нельзя понизить собственную роль');

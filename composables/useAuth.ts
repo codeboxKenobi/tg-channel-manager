@@ -18,10 +18,10 @@ export function useAuth() {
     needsSetup.value = r.needsSetup
   }
   async function login(email: string, password: string) {
-    user.value = (await api<{ user: AuthUser }>('/auth/login', { method: 'POST', body: { email, password } })).user
+    user.value = (await api<{ user: AuthUser }>('/auth/login', { method: 'POST', body: { email, ...(await sealFields({ password })) } })).user
   }
   async function setup(email: string, name: string, password: string) {
-    user.value = (await api<{ user: AuthUser }>('/auth/setup', { method: 'POST', body: { email, name, password } })).user
+    user.value = (await api<{ user: AuthUser }>('/auth/setup', { method: 'POST', body: { email, name, ...(await sealFields({ password })) } })).user
     needsSetup.value = false
   }
   async function logout() {
