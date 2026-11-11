@@ -161,3 +161,29 @@ td.wrap { white-space: normal; min-width: 180px; }
 /* отступ между кнопками в колонке действий */
 td.actions-cell button + button { margin-left: 8px; }
 @media (max-width: 640px) { table.stack td.actions-cell button + button { margin-left: 0; } }
+
+button.linkbtn { padding: 0; border: 0; background: none; color: var(--accent); min-height: 0; font-weight: 600; text-align: left; }
+button.linkbtn:hover:not(:disabled) { text-decoration: underline; }
+
+.busy { opacity: .65; transition: opacity .15s; }
+
+/* ---------- графики метрик: один стиль для всех ---------- */
+.ch-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.ch-head h3 { margin: 0; }
+.ch-head span { font-size: 13px; }
+.ch-empty { margin: 0; height: 190px; display: grid; place-items: center; }
+.ch-body { display: grid; grid-template-columns: 46px 1fr; grid-template-rows: 170px auto; column-gap: 8px; }
+.ch-y { position: relative; }
+.ch-y span { position: absolute; right: 0; transform: translateY(50%); font-size: 12px; line-height: 1; color: var(--muted); }
+.ch-plot { position: relative; touch-action: pan-y; cursor: crosshair; border-left: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.ch-plot svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.ch-grid { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed var(--line); }
+.ch-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.ch-area { fill: color-mix(in srgb, var(--accent) 16%, transparent); stroke: none; }
+.ch-dot { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; box-sizing: border-box; border-radius: 50%; background: var(--accent); border: 2px solid var(--card); pointer-events: none; }
+.ch-dot.on { width: 12px; height: 12px; margin: -6px 0 0 -6px; }
+.ch-cursor { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1px solid color-mix(in srgb, var(--accent) 55%, transparent); pointer-events: none; }
+.ch-tip { position: absolute; top: 6px; transform: translateX(10px); z-index: 2; padding: 4px 9px; border-radius: 8px; font-size: 12px; white-space: nowrap; pointer-events: none; background: var(--card); border: 1px solid var(--line); box-shadow: 0 4px 14px rgba(0, 0, 0, .14); }
+.ch-tip.left { transform: translateX(calc(-100% - 10px)); }
+.ch-x { grid-column: 2; position: relative; height: 18px; margin-top: 6px; }
+.ch-x span { position: absolute; font-size: 12px; color: var(--muted); white-space: nowrap; }
