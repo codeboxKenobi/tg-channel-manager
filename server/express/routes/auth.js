@@ -5,6 +5,7 @@ import {
   assertPassword, cleanUserInput, createSession, currentUser, destroySession,
   hashPassword, readToken, requireAuth, sha, verifyPassword,
 } from '../auth.js';
+import { issueChallenge, openPasswords } from '../sealed.js';
 
 const r = Router();
 const publicUser = (u) => ({ id: u.id, email: u.email, name: u.name, role: u.role });
@@ -26,9 +27,16 @@ r.get('/me', async (req, res) => {
   res.json({ user: user ? publicUser(user) : null, needsSetup: n === 0 });
 });
 
+// Публичный ключ для шифрования пароля в браузере + одноразовый nonce (защита от повтора запроса)
+r.get('/key', async (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json(await issueChallenge());
+});
+
 // Работает только пока в системе нет ни одного пользователя
 r.post('/setup', async (req, res) => {
-  const { email, name, password } = cleanUserInput(req.body);
+  const { password: plain } = openPasswords(req.body, ['password']);
+  const { email, name, password } = cleanUserInput({ ...req.body, password: plain });
   const { rows: [u] } = await q(
     `insert into users (email, name, password_hash, role)
      select $1, $2, $3, 'admin' where not exists (select 1 from users)
@@ -42,7 +50,7 @@ r.post('/setup', async (req, res) => {
 
 r.post('/login', async (req, res) => {
   const email = String(req.body?.email ?? '').trim().toLowerCase();
-  const password = String(req.body?.password ?? '');
+  const password = String(openPasswords(req.body, ['password']).password ?? '');
   const key = `${req.socket.remoteAddress}|${email}`;
   if (isBlocked(key)) throw httpError('Слишком много попыток. Повторите через 15 минут', 429);
 
@@ -63,7 +71,7 @@ r.post('/logout', async (req, res) => {
 });
 
 r.post('/password', requireAuth, async (req, res) => {
-  const { current, next } = req.body ?? {};
+  const { current, next } = openPasswords(req.body, ['current', 'next']);
   assertPassword(next);
   const { rows: [u] } = await q('select password_hash from users where id = $1', [req.user.id]);
   if (!(await verifyPassword(String(current ?? ''), u.password_hash))) throw httpError('Текущий пароль неверен', 400);

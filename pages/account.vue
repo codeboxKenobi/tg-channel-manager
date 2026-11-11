@@ -10,7 +10,7 @@ async function change() {
   error.value = ''
   done.value = ''
   try {
-    await api('/auth/password', { method: 'POST', body: { current: current.value, next: next.value } })
+    await api('/auth/password', { method: 'POST', body: await sealFields({ current: current.value, next: next.value }) })
     current.value = ''
     next.value = ''
     done.value = 'Пароль изменён. На других устройствах потребуется войти заново.'
