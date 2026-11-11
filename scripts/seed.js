@@ -34,7 +34,7 @@ const topics = [
 let t = 0;
 const nextTopic = () => topics[t++ % topics.length];
 
-await q('truncate sessions, post_likes, channel_stats, posts, channels, users restart identity cascade');
+await q('truncate sessions, post_likes, channel_stats, parsed_posts, parser_sources, channel_users, posts, channels, users restart identity cascade');
 
 // пользователи: пароль берётся из ADMIN_PASSWORD или генерируется и печатается в конце
 const pwd = () => crypto.randomBytes(9).toString('base64url');
@@ -96,6 +96,21 @@ for (const c of channels) {
   await insert('scheduled', { scheduled: at(3) });
   for (let i = 0; i < 3; i++) await insert('draft');
   await insert('failed', { scheduled: at(-1), error: 'Forbidden: bot is not a member of the channel chat' });
+}
+
+// парсер: демо-источники и посты (обновление этих вымышленных каналов вернёт ошибку — подключите настоящие)
+for (const [username, title] of [['demo_tech_news', 'Демо: Tech News'], ['demo_dev_blog', 'Демо: Dev Blog']]) {
+  const { rows: [s] } = await q(
+    'insert into parser_sources (username, title, created_by, last_parsed_at) values ($1, $2, $3, now()) returning id',
+    [username, title, userIds[0]],
+  );
+  for (let i = 0; i < 8; i++) {
+    const [t, content] = nextTopic();
+    await q(
+      `insert into parsed_posts (source_id, tg_message_id, text, post_url, posted_at, views) values ($1, $2, $3, $4, $5, $6)`,
+      [s.id, 100 + i, `${t}\n\n${content.replace(/<[^>]+>/g, '')}`, `https://t.me/${username}/${100 + i}`, at(-(i + 1)), rnd(500, 20000)],
+    );
+  }
 }
 
 await q(`update posts p set likes_count = (select count(*) from post_likes l where l.post_id = p.id)`);

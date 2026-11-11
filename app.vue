@@ -31,6 +31,7 @@ async function out() {
       <div id="menu" class="menu" :class="{ open: menuOpen }">
         <nav>
           <NuxtLink to="/">Каналы</NuxtLink>
+          <NuxtLink to="/parser">Парсер</NuxtLink>
           <NuxtLink to="/drafts">Подготовка постов</NuxtLink>
           <NuxtLink to="/published">Опубликованные</NuxtLink>
           <NuxtLink to="/metrics">Метрики</NuxtLink>

@@ -6,6 +6,7 @@ import users from './routes/users.js';
 import channels from './routes/channels.js';
 import posts from './routes/posts.js';
 import uploads from './routes/uploads.js';
+import parser from './routes/parser.js';
 import metrics from './routes/metrics.js';
 
 export const app = express();
@@ -23,6 +24,7 @@ app.use('/api/users', users);
 app.use('/api/channels', channels);
 app.use('/api/posts', posts);
 app.use('/api/uploads', uploads);
+app.use('/api/parser', parser);
 app.use('/api/metrics', metrics);
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Не найдено' }));
 

@@ -100,7 +100,7 @@ label.filebtn.busy { opacity: .6; pointer-events: none; }
 .preview { display: block; max-width: 100%; max-height: 220px; border-radius: 8px; border: 1px solid var(--line); margin-top: 10px; }
 
 /* ---------- планшеты и телефоны: меню-бургер ---------- */
-@media (max-width: 980px) {
+@media (max-width: 1180px) {
   .top { gap: 12px; padding: 0 16px; justify-content: space-between; }
   .burger { display: inline-flex; }
   .menu { display: none; position: absolute; top: 100%; left: 0; right: 0; flex: none; flex-direction: column; align-items: stretch; gap: 4px; padding: 8px 16px 16px; background: var(--card); border-bottom: 1px solid var(--line); box-shadow: 0 12px 24px rgba(0, 0, 0, .14); max-height: calc(100dvh - 56px); overflow-y: auto; }
@@ -187,3 +187,7 @@ button.linkbtn:hover:not(:disabled) { text-decoration: underline; }
 .ch-tip.left { transform: translateX(calc(-100% - 10px)); }
 .ch-x { grid-column: 2; position: relative; height: 18px; margin-top: 6px; }
 .ch-x span { position: absolute; font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+/* ---------- парсер ---------- */
+.clamp { display: -webkit-box; -webkit-line-clamp: 8; line-clamp: 8; -webkit-box-orient: vertical; overflow: hidden; }
+code { font-family: 'DejaVu Sans Mono', ui-monospace, monospace; font-size: .92em; padding: 1px 6px; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); }
