@@ -2,6 +2,7 @@
 const props = defineProps<{
   title: string
   items: { label: string; value: number }[]
+  summary?: string // значение в шапке графика (сумма или текущее число)
   fromMin?: boolean // масштаб от минимума — для величин вроде числа подписчиков
 }>()
 
@@ -12,7 +13,10 @@ const height = (v: number) => ((v - min.value) / (max.value - min.value)) * 100 
 
 <template>
   <div class="card chart">
-    <h3>{{ title }}</h3>
+    <div class="row between">
+      <h3>{{ title }}</h3>
+      <b v-if="summary">{{ summary }}</b>
+    </div>
     <p v-if="!items.length" class="muted">Данных пока нет</p>
     <template v-else>
       <div class="bars">
