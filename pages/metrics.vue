@@ -8,29 +8,46 @@ const top = ref<any[]>([])
 const channelId = ref<number | ''>('')
 const error = ref('')
 
+let requestId = 0 // защита от гонки: учитываем только ответ последнего запроса
+
 async function load() {
+  const current = ++requestId
   error.value = ''
   try {
     const query = { channel_id: channelId.value || undefined }
-    const [o, c, t, tp] = await Promise.all([
-      api('/metrics/overview'),
+    const [o, c, t, s, tp] = await Promise.all([
+      api('/metrics/overview', { query }),
       api('/metrics/channels'),
       api('/metrics/timeline', { query }),
+      api('/metrics/subscribers', { query }),
       api('/metrics/top-posts', { query }),
     ])
+    if (current !== requestId) return
     overview.value = o
     channels.value = c
     timeline.value = t
+    subscribers.value = s
     top.value = tp
-    subscribers.value = channelId.value ? await api('/metrics/subscribers', { query }) : []
   } catch (e: any) {
-    error.value = e.message
+    if (current === requestId) error.value = e.message
   }
 }
 
-const postsSeries = computed(() => timeline.value.map((d) => ({ label: d.day.slice(5), value: d.posts })))
-const likesSeries = computed(() => timeline.value.map((d) => ({ label: d.day.slice(5), value: d.likes })))
-const subsSeries = computed(() => subscribers.value.map((d) => ({ label: d.label, value: d.subscribers })))
+// 'YYYY-MM-DD' -> 'DD.MM' (одинаковые подписи у всех графиков)
+const fmtDay = (day: string) => `${day.slice(8, 10)}.${day.slice(5, 7)}`
+
+const postsSeries = computed(() => timeline.value.map((d) => ({ label: fmtDay(d.day), value: d.posts })))
+const likesSeries = computed(() => timeline.value.map((d) => ({ label: fmtDay(d.day), value: d.likes })))
+const subsSeries = computed(() => subscribers.value.map((d) => ({ label: fmtDay(d.day), value: d.subscribers })))
+
+const sum = (list: { value: number }[]) => list.reduce((acc, i) => acc + i.value, 0)
+const postsTotal = computed(() => fmtNum(sum(postsSeries.value)))
+const likesTotal = computed(() => fmtNum(sum(likesSeries.value)))
+const subsLast = computed(() => (subsSeries.value.length ? fmtNum(subsSeries.value[subsSeries.value.length - 1].value) : ''))
+
+const selected = computed(() => channels.value.find((c) => c.id === channelId.value))
+const visibleChannels = computed(() => (channelId.value ? channels.value.filter((c) => c.id === channelId.value) : channels.value))
+const scopeLabel = computed(() => (selected.value ? `«${selected.value.title}»` : 'во всех каналах'))
 
 onMounted(load)
 watch(channelId, load)
@@ -48,7 +65,7 @@ watch(channelId, load)
     <p v-if="error" class="error">{{ error }}</p>
 
     <div v-if="overview" class="grid">
-      <div class="card stat"><b>{{ fmtNum(overview.subscribers) }}</b><span>Подписчиков во всех каналах</span></div>
+      <div class="card stat"><b>{{ fmtNum(overview.subscribers) }}</b><span>Подписчиков {{ scopeLabel }}</span></div>
       <div class="card stat"><b>{{ fmtNum(overview.published) }}</b><span>Опубликовано постов</span></div>
       <div class="card stat"><b>{{ fmtNum(overview.likes) }}</b><span>Лайков всего</span></div>
       <div class="card stat"><b>{{ fmtNum(overview.scheduled) }}</b><span>В графике</span></div>
@@ -57,13 +74,12 @@ watch(channelId, load)
 
     <h2>Динамика за 30 дней</h2>
     <div class="charts">
-      <BarChart title="Публикации по дням" :items="postsSeries" />
-      <BarChart title="Лайки по дням" :items="likesSeries" />
-      <BarChart v-if="channelId" title="Подписчики канала" :items="subsSeries" from-min />
-      <div v-else class="card chart"><h3>Подписчики канала</h3><p class="muted">Выберите канал, чтобы увидеть рост.</p></div>
+      <BarChart title="Публикации по дням" :items="postsSeries" :summary="postsTotal" />
+      <BarChart title="Лайки по дням" :items="likesSeries" :summary="likesTotal" />
+      <BarChart title="Подписчики" :items="subsSeries" :summary="subsLast" from-min />
     </div>
 
-    <h2>Каналы</h2>
+    <h2>{{ selected ? 'Канал' : 'Каналы' }}</h2>
     <div class="card table-wrap">
       <table class="stack">
         <thead>
@@ -73,7 +89,7 @@ watch(channelId, load)
           </tr>
         </thead>
         <tbody>
-          <tr v-for="c in channels" :key="c.id">
+          <tr v-for="c in visibleChannels" :key="c.id">
             <td data-label="Канал">{{ c.title }}</td>
             <td class="num" data-label="Подписчики">{{ fmtNum(c.subscribers_count) }}</td>
             <td class="num" data-label="Рост за 30 дней" :class="{ pos: c.growth_30d > 0 }">{{ c.growth_30d > 0 ? '+' : '' }}{{ fmtNum(c.growth_30d) }}</td>
