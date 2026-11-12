@@ -5,28 +5,30 @@ import { accessibleChannelIds, assertChannelAccess } from '../access.js';
 const r = Router();
 const channelParam = (req) => (req.query.channel_id ? Number(req.query.channel_id) : null);
 
-// Во всех запросах: $1 — выбранный канал (null = все каналы), $2 — доступные пользователю каналы (null = все).
+// Читает channel_id из запроса и проверяет доступ к нему (если канал выбран).
+async function scope(req) {
+  const channelId = channelParam(req);
+  if (channelId) await assertChannelAccess(req.user, channelId);
+  return [channelId, await accessibleChannelIds(req.user)];
+}
 
+// Везде: allowed = null для администратора (все каналы), иначе массив id закреплённых каналов.
+// $1 — выбранный канал (null — все доступные), $2 — доступные пользователю каналы.
 r.get('/overview', async (req, res) => {
   const { rows: [row] } = await q(
-    `with ch as (
-       select c.id, c.subscribers_count from channels c
-       where ($1::int is null or c.id = $1) and ($2::int[] is null or c.id = any($2::int[]))
-     )
-     select (select count(*)::int from ch) as channels,
-            (select coalesce(sum(subscribers_count), 0)::int from ch) as subscribers,
-            (select coalesce(sum(ch.subscribers_count - coalesce((
-                select s.subscribers from channel_stats s
-                where s.channel_id = ch.id and s.recorded_at >= now() - interval '30 days'
-                order by s.recorded_at asc limit 1), ch.subscribers_count)), 0)::int from ch) as growth_30d,
-            (select count(*)::int from posts p where p.status = 'published' and p.channel_id in (select id from ch)) as published,
-            (select count(*)::int from posts p where p.status = 'scheduled' and p.channel_id in (select id from ch)) as scheduled,
-            (select count(*)::int from posts p where p.status = 'draft' and p.channel_id in (select id from ch)) as drafts,
+    `select (select count(*)::int from channels c
+              where ($1::int is null or c.id = $1) and ($2::int[] is null or c.id = any($2::int[]))) as channels,
+            (select coalesce(sum(c.subscribers_count), 0)::int from channels c
+              where ($1::int is null or c.id = $1) and ($2::int[] is null or c.id = any($2::int[]))) as subscribers,
+            (select count(*)::int from posts p where p.status = 'published'
+              and ($1::int is null or p.channel_id = $1) and ($2::int[] is null or p.channel_id = any($2::int[]))) as published,
+            (select count(*)::int from posts p where p.status = 'scheduled'
+              and ($1::int is null or p.channel_id = $1) and ($2::int[] is null or p.channel_id = any($2::int[]))) as scheduled,
+            (select count(*)::int from posts p where p.status = 'draft'
+              and ($1::int is null or p.channel_id = $1) and ($2::int[] is null or p.channel_id = any($2::int[]))) as drafts,
             (select count(*)::int from post_likes l join posts p on p.id = l.post_id
-              where p.channel_id in (select id from ch)) as likes,
-            coalesce((select round(avg(p.likes_count), 1) from posts p
-              where p.status = 'published' and p.channel_id in (select id from ch)), 0)::float as avg_likes`,
-    [channelParam(req), await accessibleChannelIds(req.user)],
+              where ($1::int is null or p.channel_id = $1) and ($2::int[] is null or p.channel_id = any($2::int[]))) as likes`,
+    await scope(req),
   );
   res.json(row);
 });
@@ -49,8 +51,7 @@ r.get('/channels', async (req, res) => {
   res.json(rows);
 });
 
-// Единая динамика за 30 дней: публикации, лайки и подписчики на одной оси дат.
-// Подписчики — сумма последних известных значений по каналам на конец дня (null, пока снимков нет).
+// посты и лайки по дням за 30 дней
 r.get('/timeline', async (req, res) => {
   const { rows } = await q(
     `select to_char(d, 'YYYY-MM-DD') as day,
@@ -61,36 +62,35 @@ r.get('/timeline', async (req, res) => {
             (select count(*)::int from post_likes l join posts p on p.id = l.post_id
               where l.created_at::date = d::date
                 and ($1::int is null or p.channel_id = $1)
-                and ($2::int[] is null or p.channel_id = any($2::int[]))) as likes,
-            (select sum(x.subscribers)::int from (
-               select distinct on (s.channel_id) s.subscribers
-               from channel_stats s
-               where s.recorded_at < d + interval '1 day'
-                 and ($1::int is null or s.channel_id = $1)
-                 and ($2::int[] is null or s.channel_id = any($2::int[]))
-               order by s.channel_id, s.recorded_at desc) x) as subscribers
+                and ($2::int[] is null or p.channel_id = any($2::int[]))) as likes
      from generate_series((current_date - 29)::timestamp, current_date::timestamp, interval '1 day') d
      order by d`,
-    [channelParam(req), await accessibleChannelIds(req.user)],
+    await scope(req),
   );
   res.json(rows);
 });
 
-// оставлен для совместимости: подписчики одного канала по дням
+// подписчики по дням за 30 дней: у выбранного канала или суммарно по всем доступным.
+// На каждый день берётся последний снимок на конец дня (если снимков до этого дня нет — самый ранний).
 r.get('/subscribers', async (req, res) => {
-  const id = channelParam(req);
-  if (id) await assertChannelAccess(req.user, id);
   const { rows } = await q(
-    `select to_char(day, 'DD.MM') as label, subscribers from (
-       select distinct on (date_trunc('day', recorded_at))
-              date_trunc('day', recorded_at) as day, subscribers
-       from channel_stats
-       where channel_id = $1 and recorded_at >= now() - interval '30 days'
-       order by date_trunc('day', recorded_at), recorded_at desc
-     ) t order by day`,
-    [id],
+    `select to_char(d, 'YYYY-MM-DD') as day, coalesce(sum(s.subscribers), 0)::int as subscribers
+     from generate_series((current_date - 29)::timestamp, current_date::timestamp, interval '1 day') d
+     cross join (select id from channels
+                  where ($1::int is null or id = $1) and ($2::int[] is null or id = any($2::int[]))) c
+     left join lateral (
+       select subscribers from channel_stats
+       where channel_id = c.id
+       order by (recorded_at >= d + interval '1 day'),
+                case when recorded_at < d + interval '1 day' then recorded_at end desc,
+                recorded_at asc
+       limit 1
+     ) s on true
+     group by d order by d`,
+    await scope(req),
   );
-  res.json(rows);
+  // нет ни одного снимка — графику показывать нечего
+  res.json(rows.some((x) => x.subscribers > 0) ? rows : []);
 });
 
 r.get('/top-posts', async (req, res) => {
@@ -100,7 +100,7 @@ r.get('/top-posts', async (req, res) => {
      where p.status = 'published' and ($1::int is null or p.channel_id = $1)
        and ($2::int[] is null or p.channel_id = any($2::int[]))
      order by p.likes_count desc, p.published_at desc limit 10`,
-    [channelParam(req), await accessibleChannelIds(req.user)],
+    await scope(req),
   );
   res.json(rows);
 });
