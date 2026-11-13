@@ -1,0 +1,35 @@
+export interface AuthUser {
+  id: number
+  email: string
+  name: string
+  role: 'admin' | 'editor'
+  is_super?: boolean
+}
+
+export function useAuth() {
+  const api = useApi()
+  // undefined — ещё не проверяли, null — не вошёл
+  const user = useState<AuthUser | null | undefined>('auth-user', () => undefined)
+  const needsSetup = useState<boolean>('auth-needs-setup', () => false)
+  const isAdmin = computed(() => user.value?.role === 'admin')
+  const isSuper = computed(() => Boolean(user.value?.is_super))
+
+  async function fetchMe() {
+    const r = await api<{ user: AuthUser | null; needsSetup: boolean }>('/auth/me')
+    user.value = r.user
+    needsSetup.value = r.needsSetup
+  }
+  async function login(email: string, password: string) {
+    user.value = (await api<{ user: AuthUser }>('/auth/login', { method: 'POST', body: { email, ...(await sealFields({ password })) } })).user
+  }
+  async function setup(email: string, name: string, password: string) {
+    user.value = (await api<{ user: AuthUser }>('/auth/setup', { method: 'POST', body: { email, name, ...(await sealFields({ password })) } })).user
+    needsSetup.value = false
+  }
+  async function logout() {
+    await api('/auth/logout', { method: 'POST' }).catch(() => {})
+    user.value = null
+  }
+
+  return { user, needsSetup, isAdmin, isSuper, fetchMe, login, setup, logout }
+}

@@ -104,4 +104,36 @@ create index if not exists parsed_posts_posted_idx on parsed_posts (posted_at de
 
 -- тип медиа спарсенного поста: photo | video
 alter table parsed_posts add column if not exists media_type text;
+
+-- мультиарендность: у каждого администратора своё изолированное пространство (каналы, редакторы, источники парсера)
+alter table users add column if not exists owner_id int references users(id) on delete cascade;
+alter table users add column if not exists is_super boolean not null default false;
+alter table channels add column if not exists owner_id int references users(id) on delete cascade;
+alter table parser_sources add column if not exists owner_id int references users(id) on delete cascade;
+create index if not exists users_owner_idx on users (owner_id);
+create index if not exists channels_owner_idx on channels (owner_id);
+alter table parser_sources drop constraint if exists parser_sources_username_key;
+create unique index if not exists parser_sources_owner_username_idx on parser_sources (owner_id, username);
+
+-- перенос существующих данных: всё достаётся первому администратору, он же главный
+update users set is_super = true
+  where id = (select min(id) from users where role = 'admin') and not exists (select 1 from users where is_super);
+update users set owner_id = (select min(id) from users where role = 'admin') where role = 'editor' and owner_id is null;
+update channels set owner_id = (select min(id) from users where role = 'admin') where owner_id is null;
+update parser_sources set owner_id = (select min(id) from users where role = 'admin') where owner_id is null;
+
+-- отдельный бот у каждого администратора; токен хранится зашифрованным (AES-256-GCM, ключ SECRETS_KEY)
+create table if not exists workspace_bots (
+  owner_id     int primary key references users(id) on delete cascade,
+  token_enc    text not null,
+  bot_id       bigint not null,
+  bot_username text,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now()
+);
+create unique index if not exists workspace_bots_bot_id_idx on workspace_bots (bot_id);
+
+-- один и тот же Telegram-канал могут подключить разные администраторы (каждый своим ботом)
+alter table channels drop constraint if exists channels_tg_chat_id_key;
+create unique index if not exists channels_owner_chat_idx on channels (owner_id, tg_chat_id);
 `;

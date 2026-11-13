@@ -48,6 +48,11 @@ function edit(rel, fn) {
 for (const [rel, b64] of Object.entries(NEW_FILES)) {
   const file = p(rel);
   fs.mkdirSync(path.dirname(file), { recursive: true });
+  // версия с изолированными пространствами администраторов (add-workspaces.mjs) новее: её не перезаписываем
+  if (rel === 'server/express/routes/parser.js' && fs.existsSync(file) && fs.readFileSync(file, 'utf8').includes('workspaceId')) {
+    log(`= ${rel}: версия с пространствами администраторов, не трогаю`);
+    continue;
+  }
   if (fs.existsSync(file)) {
     if (fs.readFileSync(file, 'utf8') === dec(b64)) { log(`= ${rel}: без изменений`); continue; }
     backup(file);

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const { needsSetup, login, setup } = useAuth()
+const { needsSetup, login, setup, registration } = useAuth()
 const email = ref('')
 const name = ref('')
 const password = ref('')
@@ -41,5 +41,8 @@ async function submit() {
     <div class="actions">
       <button class="primary" :disabled="busy">{{ needsSetup ? 'Создать и войти' : 'Войти' }}</button>
     </div>
+    <p v-if="!needsSetup && registration.open" class="muted" style="margin: 16px 0 0">
+      Нет аккаунта? <NuxtLink to="/register">Зарегистрироваться</NuxtLink>
+    </p>
   </form>
 </template>

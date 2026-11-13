@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { q } from '../db.js';
-import { bot, memberCount } from '../bot.js';
+import { getBot, memberCount } from '../bot.js';
 import { httpError } from '../http.js';
 import { requireRole } from '../auth.js';
 import { accessibleChannelIds, assertChannelAccess, setChannelUsers } from '../access.js';
@@ -30,22 +30,24 @@ r.post('/', requireRole('admin'), async (req, res) => {
   if (!chat) throw httpError('Укажите @username или id канала');
 
   let tgChatId, name = title, username = null, about = description ?? null, subs = 0;
-  if (bot) {
-    const info = await bot.telegram.getChat(chat);
+  const conn = await getBot(req.user.id); // бот этого администратора: чужими ботами каналы не подключить
+  if (conn) {
+    const info = await conn.telegraf.telegram.getChat(chat);
     tgChatId = info.id;
     name = info.title;
     username = info.username ?? null;
     about = info.description ?? null;
-    subs = await memberCount(info.id);
+    subs = await memberCount(req.user.id, info.id);
   } else {
     tgChatId = Number(chat);
-    if (!Number.isFinite(tgChatId) || !name) throw httpError('Без BOT_TOKEN укажите числовой id и название');
+    if (!Number.isFinite(tgChatId) || !name) throw httpError('Бот не подключён (страница «Бот»): укажите числовой id и название');
   }
 
+  if ((await q('select 1 from channels where tg_chat_id = $1 and owner_id = $2', [tgChatId, req.user.id])).rowCount) throw httpError('Этот канал уже подключён', 409);
   const { rows: [row] } = await q(
-    `insert into channels (tg_chat_id, title, username, description, subscribers_count)
-     values ($1, $2, $3, $4, $5) returning *`,
-    [tgChatId, name, username, about, subs],
+    `insert into channels (tg_chat_id, title, username, description, subscribers_count, owner_id)
+     values ($1, $2, $3, $4, $5, $6) returning *`,
+    [tgChatId, name, username, about, subs, req.user.id],
   );
   if (subs) await q('insert into channel_stats (channel_id, subscribers) values ($1, $2)', [row.id, subs]);
   res.status(201).json(row);
@@ -55,20 +57,21 @@ r.put('/:id', requireRole('admin'), async (req, res) => {
   const { title, description, is_active } = req.body ?? {};
   if (!title?.trim()) throw httpError('Укажите название');
   const { rows: [row] } = await q(
-    'update channels set title = $2, description = $3, is_active = $4 where id = $1 returning *',
-    [req.params.id, title.trim(), description ?? null, is_active !== false],
+    'update channels set title = $2, description = $3, is_active = $4 where id = $1 and owner_id = $5 returning *',
+    [req.params.id, title.trim(), description ?? null, is_active !== false, req.user.id],
   );
   if (!row) throw httpError('Канал не найден', 404);
   res.json(row);
 });
 
 r.post('/:id/refresh', async (req, res) => {
-  if (!bot) throw httpError('BOT_TOKEN не задан', 503);
   const { rows: [c] } = await q('select * from channels where id = $1', [req.params.id]);
   if (!c) throw httpError('Канал не найден', 404);
   await assertChannelAccess(req.user, c.id);
-  const info = await bot.telegram.getChat(c.tg_chat_id);
-  const n = await memberCount(c.tg_chat_id);
+  const conn = await getBot(c.owner_id);
+  if (!conn) throw httpError('Бот не подключён: администратор должен добавить токен на странице «Бот»', 503);
+  const info = await conn.telegraf.telegram.getChat(c.tg_chat_id);
+  const n = await memberCount(c.owner_id, c.tg_chat_id);
   const { rows: [row] } = await q(
     `update channels set title = $2, username = $3, description = $4, subscribers_count = $5
      where id = $1 returning *`,
@@ -79,16 +82,16 @@ r.post('/:id/refresh', async (req, res) => {
 });
 
 r.delete('/:id', requireRole('admin'), async (req, res) => {
-  const { rowCount } = await q('delete from channels where id = $1', [req.params.id]);
+  const { rowCount } = await q('delete from channels where id = $1 and owner_id = $2', [req.params.id, req.user.id]);
   if (!rowCount) throw httpError('Канал не найден', 404);
   res.status(204).end();
 });
 
 // Закрепление канала за пользователями (полная замена списка)
 r.put('/:id/users', requireRole('admin'), async (req, res) => {
-  const { rowCount } = await q('select 1 from channels where id = $1', [req.params.id]);
+  const { rowCount } = await q('select 1 from channels where id = $1 and owner_id = $2', [req.params.id, req.user.id]);
   if (!rowCount) throw httpError('Канал не найден', 404);
-  await setChannelUsers(Number(req.params.id), req.body?.user_ids);
+  await setChannelUsers(Number(req.params.id), req.body?.user_ids, req.user.id);
   res.status(204).end();
 });
 

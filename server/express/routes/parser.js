@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { q } from '../db.js';
 import { httpError } from '../http.js';
-import { assertChannelAccess } from '../access.js';
+import { assertChannelAccess, workspaceId } from '../access.js';
 import { removeUploadIfUnused } from '../uploads.js';
 import { clampLimit, downloadMedia, normalizeChannel, scrapeChannel, stripLinks } from '../parser.js';
 
@@ -10,6 +10,7 @@ const r = Router();
 // каналы, которые парсятся прямо сейчас (защита от двойного клика и параллельных запусков)
 const running = (globalThis.__tgmParsing ??= new Set());
 const MAX_SOURCES_PER_RUN = 20;
+const MAX_SOURCES = 50; // на пространство: открытая регистрация не должна давать безлимитный сбор с t.me
 
 const ints = (list) => [...new Set((Array.isArray(list) ? list : []).map(Number))].filter(Number.isInteger);
 
@@ -38,11 +39,13 @@ const sourceWithCount = async (id) =>
 
 // ---------- каналы-источники ----------
 
-r.get('/sources', async (_req, res) => {
+r.get('/sources', async (req, res) => {
   const { rows } = await q(
     `select s.*, count(pp.id)::int as posts_count
      from parser_sources s left join parsed_posts pp on pp.source_id = s.id
+     where s.owner_id = $1
      group by s.id order by s.username`,
+    [workspaceId(req.user)],
   );
   res.json(rows);
 });
@@ -50,14 +53,17 @@ r.get('/sources', async (_req, res) => {
 // Добавление сразу проверяет канал и забирает свежие посты первой страницы
 r.post('/sources', async (req, res) => {
   const username = normalizeChannel(req.body?.channel);
-  if ((await q('select 1 from parser_sources where username = $1', [username])).rowCount) {
+  const ws = workspaceId(req.user);
+  if ((await q('select 1 from parser_sources where username = $1 and owner_id = $2', [username, ws])).rowCount) {
     throw httpError('Этот канал уже добавлен', 409);
   }
+  const { rows: [{ n }] } = await q('select count(*)::int as n from parser_sources where owner_id = $1', [ws]);
+  if (n >= MAX_SOURCES) throw httpError(`Не больше ${MAX_SOURCES} каналов-источников: удалите ненужные`, 409);
   const scraped = await scrapeChannel(username, { limit: 20 });
   const { rows: [src] } = await q(
-    `insert into parser_sources (username, title, last_parsed_at, created_by)
-     values ($1, $2, now(), $3) returning id`,
-    [username, scraped.title || username, req.user.id],
+    `insert into parser_sources (username, title, last_parsed_at, created_by, owner_id)
+     values ($1, $2, now(), $3, $4) returning id`,
+    [username, scraped.title || username, req.user.id, ws],
   );
   const added = await storePosts(src.id, scraped.posts);
   res.status(201).json({ ...(await sourceWithCount(src.id)), added });
@@ -65,7 +71,7 @@ r.post('/sources', async (req, res) => {
 
 // посты-черновики, уже созданные из спарсенных, остаются в «Подготовке постов»
 r.delete('/sources/:id', async (req, res) => {
-  const { rowCount } = await q('delete from parser_sources where id = $1', [req.params.id]);
+  const { rowCount } = await q('delete from parser_sources where id = $1 and owner_id = $2', [req.params.id, workspaceId(req.user)]);
   if (!rowCount) throw httpError('Канал не найден', 404);
   res.status(204).end();
 });
@@ -78,7 +84,7 @@ r.post('/parse', async (req, res) => {
   if (ids.length > MAX_SOURCES_PER_RUN) throw httpError(`За один раз — не более ${MAX_SOURCES_PER_RUN} каналов`);
   const limit = clampLimit(req.body?.limit);
 
-  const { rows: sources } = await q('select * from parser_sources where id = any($1::int[]) order by username', [ids]);
+  const { rows: sources } = await q('select * from parser_sources where id = any($1::int[]) and owner_id = $2 order by username', [ids, workspaceId(req.user)]);
   const results = [];
   for (const s of sources) {
     const base = { id: s.id, username: s.username };
@@ -120,11 +126,12 @@ r.get('/posts', async (req, res) => {
      from parsed_posts pp
        join parser_sources s on s.id = pp.source_id
        left join posts p on p.id = pp.draft_post_id
-     where ($1::int[] is null or pp.source_id = any($1::int[]))
+     where s.owner_id = $5
+       and ($1::int[] is null or pp.source_id = any($1::int[]))
        and ($2::text = '' or pp.content ilike '%' || $2 || '%')
      order by pp.posted_at desc nulls last, pp.id desc
      limit $3 offset $4`,
-    [sourceIds, search.replace(/[\\%_]/g, '\\$&'), limit, offset],
+    [sourceIds, search.replace(/[\\%_]/g, '\\$&'), limit, offset, workspaceId(req.user)],
   );
   res.json({ items: rows.map(({ total, ...p }) => p), total: rows[0]?.total ?? 0 });
 });
@@ -142,8 +149,8 @@ r.post('/posts/:id/draft', async (req, res) => {
   if (!(await q('select 1 from channels where id = $1', [channelId])).rowCount) throw httpError('Канал не найден', 404);
 
   const { rows: [pp] } = await q(
-    `select * from parsed_posts where id = $1`,
-    [req.params.id],
+    `select pp.* from parsed_posts pp join parser_sources s on s.id = pp.source_id where pp.id = $1 and s.owner_id = $2`,
+    [req.params.id, workspaceId(req.user)],
   );
   if (!pp) throw httpError('Пост не найден', 404);
   if (pp.draft_post_id) throw httpError('Пост уже сформирован', 409);
