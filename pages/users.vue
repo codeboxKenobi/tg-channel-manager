@@ -1,9 +1,11 @@
 <script setup lang="ts">
 const api = useApi()
-const { user: me } = useAuth()
-const users = ref<any[]>([])
+const { user: me, isSuper } = useAuth()
+const users = ref<any[]>([]) // редакторы моего пространства
+const admins = ref<any[]>([]) // все администраторы (только для главного администратора)
 const channels = ref<any[]>([])
-const form = reactive({ email: '', name: '', password: '', role: 'editor' })
+const editorForm = reactive({ email: '', name: '', password: '' })
+const adminForm = reactive({ email: '', name: '', password: '' })
 const error = ref('')
 const busy = ref(false)
 const accessFor = ref<any | null>(null)
@@ -11,6 +13,7 @@ const accessFor = ref<any | null>(null)
 async function load() {
   users.value = await api('/users')
   channels.value = await api('/channels')
+  admins.value = isSuper.value ? await api('/users/admins') : []
 }
 async function run(fn: () => Promise<any>) {
   error.value = ''
@@ -25,18 +28,24 @@ async function run(fn: () => Promise<any>) {
   }
 }
 
-const create = () =>
+const create = (role: 'editor' | 'admin', form: { email: string; name: string; password: string }) =>
   run(async () => {
-    await api('/users', { method: 'POST', body: { email: form.email, name: form.name, role: form.role, ...(await sealFields({ password: form.password })) } })
-    Object.assign(form, { email: '', name: '', password: '', role: 'editor' })
+    await api('/users', { method: 'POST', body: { email: form.email, name: form.name, role, ...(await sealFields({ password: form.password })) } })
+    Object.assign(form, { email: '', name: '', password: '' })
   })
-const setRole = (u: any, role: string) => run(() => api(`/users/${u.id}`, { method: 'PUT', body: { name: u.name, role } }))
 const resetPassword = (u: any) => {
   const password = prompt(`Новый пароль для ${u.email} (не короче 8 символов)`)
-  return password ? run(async () => api(`/users/${u.id}`, { method: 'PUT', body: { name: u.name, role: u.role, ...(await sealFields({ password })) } })) : undefined
+  return password ? run(async () => api(`/users/${u.id}`, { method: 'PUT', body: { name: u.name, ...(await sealFields({ password })) } })) : undefined
 }
-const remove = (u: any) =>
-  confirm(`Удалить пользователя ${u.email}?`) ? run(() => api(`/users/${u.id}`, { method: 'DELETE' })) : undefined
+const removeEditor = (u: any) =>
+  confirm(`Удалить редактора ${u.email}?`) ? run(() => api(`/users/${u.id}`, { method: 'DELETE' })) : undefined
+// администратор уносит с собой всё своё пространство, поэтому предупреждаем о его содержимом
+const removeAdmin = (u: any) =>
+  confirm(
+    `Удалить администратора ${u.email}?\n\nВместе с ним будут безвозвратно удалены его каналы (${u.channels_count}) с постами и его редакторы (${u.editors_count}).`,
+  )
+    ? run(() => api(`/users/${u.id}?force=1`, { method: 'DELETE' }))
+    : undefined
 
 const channelOptions = computed(() =>
   channels.value.map((c) => ({ id: c.id, label: c.title, hint: c.username ? '@' + c.username : undefined })),
@@ -55,16 +64,12 @@ onMounted(() => run(async () => {}))
   <section>
     <div class="row head"><h1>Пользователи</h1></div>
 
-    <form class="card" @submit.prevent="create">
-      <h3>Новый пользователь</h3>
+    <form class="card" @submit.prevent="create('editor', editorForm)">
+      <h3>Новый редактор</h3>
       <div class="row" style="align-items: flex-end">
-        <div style="flex: 2; min-width: 200px"><label>Email</label><input v-model="form.email" type="email" required /></div>
-        <div style="flex: 1; min-width: 150px"><label>Имя</label><input v-model="form.name" required /></div>
-        <div style="flex: 1; min-width: 150px"><label>Пароль</label><input v-model="form.password" type="password" required minlength="8" autocomplete="new-password" /></div>
-        <div style="width: 150px">
-          <label>Роль</label>
-          <select v-model="form.role"><option value="editor">Редактор</option><option value="admin">Администратор</option></select>
-        </div>
+        <div style="flex: 2; min-width: 200px"><label>Email</label><input v-model="editorForm.email" type="email" required /></div>
+        <div style="flex: 1; min-width: 150px"><label>Имя</label><input v-model="editorForm.name" required /></div>
+        <div style="flex: 1; min-width: 150px"><label>Пароль</label><input v-model="editorForm.password" type="password" required minlength="8" autocomplete="new-password" /></div>
         <button class="primary" :disabled="busy">Добавить</button>
       </div>
     </form>
@@ -74,7 +79,7 @@ onMounted(() => run(async () => {}))
     <div v-if="accessFor" class="card">
       <AccessPicker
         :key="accessFor.id"
-        :title="'Каналы пользователя ' + accessFor.name"
+        :title="'Каналы редактора ' + accessFor.name"
         :options="channelOptions"
         :selected="pickedIds(accessFor)"
         empty="Каналов пока нет. Подключите канал на странице «Каналы»."
@@ -83,37 +88,73 @@ onMounted(() => run(async () => {}))
       />
     </div>
 
+    <h3 style="margin: 20px 0 8px">Мои редакторы</h3>
     <div class="card table-wrap">
-      <table class="stack">
-        <thead><tr><th>Имя</th><th>Email</th><th>Роль</th><th>Каналы</th><th>Создан</th><th /></tr></thead>
+      <p v-if="!users.length" class="muted" style="margin: 0">Редакторов пока нет.</p>
+      <table v-else class="stack">
+        <thead><tr><th>Имя</th><th>Email</th><th>Каналы</th><th>Создан</th><th /></tr></thead>
         <tbody>
           <tr v-for="u in users" :key="u.id">
             <td data-label="Имя">{{ u.name }}</td>
             <td data-label="Email">{{ u.email }}</td>
-            <td data-label="Роль">
-              <select :value="u.role" :disabled="busy || u.id === me?.id" style="width: 160px" @change="setRole(u, ($event.target as HTMLSelectElement).value)">
-                <option value="editor">Редактор</option>
-                <option value="admin">Администратор</option>
-              </select>
-            </td>
             <td class="wrap" data-label="Каналы">
-              <span v-if="u.role === 'admin'" class="muted">все каналы</span>
-              <span v-else-if="!u.channels.length" class="warn">нет доступа</span>
+              <span v-if="!u.channels.length" class="warn">нет доступа</span>
               <span v-else class="chips-inline"><span v-for="c in u.channels" :key="c.id" class="tagchip">{{ c.title }}</span></span>
             </td>
             <td data-label="Создан">{{ fmtDate(u.created_at) }}</td>
             <td class="num actions-cell">
-              <button v-if="u.role === 'editor'" :disabled="busy" @click="accessFor = u">Каналы</button>
+              <button :disabled="busy" @click="accessFor = u">Каналы</button>
               <button :disabled="busy" @click="resetPassword(u)">Сбросить пароль</button>
-              <button class="danger" :disabled="busy || u.id === me?.id" @click="remove(u)">Удалить</button>
+              <button class="danger" :disabled="busy" @click="removeEditor(u)">Удалить</button>
             </td>
           </tr>
         </tbody>
       </table>
     </div>
+
+    <template v-if="isSuper">
+      <h3 style="margin: 28px 0 8px">Администраторы</h3>
+      <form class="card" @submit.prevent="create('admin', adminForm)">
+        <h3>Новый администратор</h3>
+        <p class="muted" style="margin-top: 0">У каждого администратора своё изолированное пространство: свои каналы, редакторы и источники парсера. Вы их не увидите.</p>
+        <div class="row" style="align-items: flex-end">
+          <div style="flex: 2; min-width: 200px"><label>Email</label><input v-model="adminForm.email" type="email" required /></div>
+          <div style="flex: 1; min-width: 150px"><label>Имя</label><input v-model="adminForm.name" required /></div>
+          <div style="flex: 1; min-width: 150px"><label>Пароль</label><input v-model="adminForm.password" type="password" required minlength="8" autocomplete="new-password" /></div>
+          <button class="primary" :disabled="busy">Добавить</button>
+        </div>
+      </form>
+
+      <div class="card table-wrap">
+        <table class="stack">
+          <thead><tr><th>Имя</th><th>Email</th><th>Каналов</th><th>Редакторов</th><th>Создан</th><th /></tr></thead>
+          <tbody>
+            <tr v-for="a in admins" :key="a.id">
+              <td data-label="Имя">
+                {{ a.name }}
+                <span v-if="a.id === me?.id" class="tagchip">вы</span>
+                <span v-else-if="a.is_super" class="tagchip">главный</span>
+              </td>
+              <td data-label="Email">{{ a.email }}</td>
+              <td data-label="Каналов">{{ a.channels_count }}</td>
+              <td data-label="Редакторов">{{ a.editors_count }}</td>
+              <td data-label="Создан">{{ fmtDate(a.created_at) }}</td>
+              <td class="num actions-cell">
+                <template v-if="a.id !== me?.id && !a.is_super">
+                  <button :disabled="busy" @click="resetPassword(a)">Сбросить пароль</button>
+                  <button class="danger" :disabled="busy" @click="removeAdmin(a)">Удалить</button>
+                </template>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </template>
+
     <p class="muted">
-      Администратор видит все каналы и управляет пользователями. Редактор работает только с каналами, которые за ним закреплены:
-      он видит их посты и метрики, остальные каналы для него скрыты.
+      Администратор работает в своём изолированном пространстве: видит только свои каналы, посты, метрики и источники парсера, и управляет только своими редакторами.
+      Редактор работает только с каналами, которые за ним закреплены.
+      <template v-if="isSuper">Главный администратор дополнительно создаёт других администраторов и может удалить их вместе с их пространством.</template>
     </p>
   </section>
 </template>

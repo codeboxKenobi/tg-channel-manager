@@ -1,0 +1,95 @@
+import { Router } from 'express';
+import { q } from '../db.js';
+import { bot, memberCount } from '../bot.js';
+import { httpError } from '../http.js';
+import { requireRole } from '../auth.js';
+import { accessibleChannelIds, assertChannelAccess, setChannelUsers } from '../access.js';
+
+const r = Router();
+
+r.get('/', async (req, res) => {
+  const { rows } = await q(
+    `select c.*,
+            count(p.id) filter (where p.status = 'published')::int as published_count,
+            count(p.id) filter (where p.status in ('draft', 'scheduled'))::int as pending_count,
+            coalesce((select json_agg(json_build_object('id', u.id, 'name', u.name) order by u.name)
+                      from channel_users cu join users u on u.id = cu.user_id
+                      where cu.channel_id = c.id), '[]'::json) as assigned_users
+     from channels c left join posts p on p.channel_id = c.id
+     where $1::int[] is null or c.id = any($1::int[])
+     group by c.id order by c.id`,
+    [await accessibleChannelIds(req.user)],
+  );
+  if (req.user.role !== 'admin') rows.forEach((r) => delete r.assigned_users);
+  res.json(rows);
+});
+
+// chat — @username или числовой id. Бот должен быть администратором канала.
+r.post('/', requireRole('admin'), async (req, res) => {
+  const { chat, title, description } = req.body ?? {};
+  if (!chat) throw httpError('Укажите @username или id канала');
+
+  let tgChatId, name = title, username = null, about = description ?? null, subs = 0;
+  if (bot) {
+    const info = await bot.telegram.getChat(chat);
+    tgChatId = info.id;
+    name = info.title;
+    username = info.username ?? null;
+    about = info.description ?? null;
+    subs = await memberCount(info.id);
+  } else {
+    tgChatId = Number(chat);
+    if (!Number.isFinite(tgChatId) || !name) throw httpError('Без BOT_TOKEN укажите числовой id и название');
+  }
+
+  const { rows: [row] } = await q(
+    `insert into channels (tg_chat_id, title, username, description, subscribers_count)
+     values ($1, $2, $3, $4, $5) returning *`,
+    [tgChatId, name, username, about, subs],
+  );
+  if (subs) await q('insert into channel_stats (channel_id, subscribers) values ($1, $2)', [row.id, subs]);
+  res.status(201).json(row);
+});
+
+r.put('/:id', requireRole('admin'), async (req, res) => {
+  const { title, description, is_active } = req.body ?? {};
+  if (!title?.trim()) throw httpError('Укажите название');
+  const { rows: [row] } = await q(
+    'update channels set title = $2, description = $3, is_active = $4 where id = $1 returning *',
+    [req.params.id, title.trim(), description ?? null, is_active !== false],
+  );
+  if (!row) throw httpError('Канал не найден', 404);
+  res.json(row);
+});
+
+r.post('/:id/refresh', async (req, res) => {
+  if (!bot) throw httpError('BOT_TOKEN не задан', 503);
+  const { rows: [c] } = await q('select * from channels where id = $1', [req.params.id]);
+  if (!c) throw httpError('Канал не найден', 404);
+  await assertChannelAccess(req.user, c.id);
+  const info = await bot.telegram.getChat(c.tg_chat_id);
+  const n = await memberCount(c.tg_chat_id);
+  const { rows: [row] } = await q(
+    `update channels set title = $2, username = $3, description = $4, subscribers_count = $5
+     where id = $1 returning *`,
+    [c.id, info.title, info.username ?? null, info.description ?? null, n],
+  );
+  await q('insert into channel_stats (channel_id, subscribers) values ($1, $2)', [c.id, n]);
+  res.json(row);
+});
+
+r.delete('/:id', requireRole('admin'), async (req, res) => {
+  const { rowCount } = await q('delete from channels where id = $1', [req.params.id]);
+  if (!rowCount) throw httpError('Канал не найден', 404);
+  res.status(204).end();
+});
+
+// Закрепление канала за пользователями (полная замена списка)
+r.put('/:id/users', requireRole('admin'), async (req, res) => {
+  const { rowCount } = await q('select 1 from channels where id = $1', [req.params.id]);
+  if (!rowCount) throw httpError('Канал не найден', 404);
+  await setChannelUsers(Number(req.params.id), req.body?.user_ids);
+  res.status(204).end();
+});
+
+export default r;

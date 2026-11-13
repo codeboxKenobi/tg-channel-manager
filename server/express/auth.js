@@ -74,7 +74,7 @@ export async function currentUser(req) {
   const token = readToken(req);
   if (!token) return null;
   const { rows: [u] } = await q(
-    `select u.id, u.email, u.name, u.role
+    `select u.id, u.email, u.name, u.role, u.owner_id, u.is_super
      from sessions s join users u on u.id = s.user_id
      where s.token_hash = $1 and s.expires_at > now()`,
     [sha(token)],
@@ -92,6 +92,10 @@ export async function requireAuth(req, _res, next) {
 
 export const requireRole = (role) => (req, _res, next) =>
   req.user?.role === role ? next() : next(httpError('Недостаточно прав', 403));
+
+/** Только главный администратор (создаёт других администраторов). */
+export const requireSuper = (req, _res, next) =>
+  req.user?.is_super ? next() : next(httpError('Недостаточно прав', 403));
 
 // Защита от CSRF: запросы с изменением данных должны приходить с нашего origin (плюс SameSite=Lax у cookie)
 export function csrfGuard(req, _res, next) {

@@ -2,7 +2,7 @@
 const { user, isAdmin, logout } = useAuth()
 const route = useRoute()
 const menuOpen = ref(false)
-const showNav = computed(() => Boolean(user.value) && route.path !== '/login')
+const showNav = computed(() => Boolean(user.value) && !['/login', '/register'].includes(route.path))
 
 watch(() => route.fullPath, () => (menuOpen.value = false))
 const onKey = (e: KeyboardEvent) => {
@@ -31,9 +31,11 @@ async function out() {
       <div id="menu" class="menu" :class="{ open: menuOpen }">
         <nav>
           <NuxtLink to="/">Каналы</NuxtLink>
+          <NuxtLink to="/parser">Парсер</NuxtLink>
           <NuxtLink to="/drafts">Подготовка постов</NuxtLink>
           <NuxtLink to="/published">Опубликованные</NuxtLink>
           <NuxtLink to="/metrics">Метрики</NuxtLink>
+          <NuxtLink v-if="isAdmin" to="/bot">Бот</NuxtLink>
           <NuxtLink v-if="isAdmin" to="/users">Пользователи</NuxtLink>
         </nav>
         <div class="sp" />

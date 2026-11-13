@@ -1,11 +1,11 @@
 import cron from 'node-cron';
 import { q } from './db.js';
-import { bot, publishPost, memberCount } from './bot.js';
+import { activeBots, getBot, publishPost, memberCount } from './bot.js';
 
 /** Публикует один пост (статус должен быть 'publishing'), возвращает обновлённую строку. */
 export async function publishById(id) {
   const { rows: [post] } = await q(
-    'select p.*, c.tg_chat_id from posts p join channels c on c.id = p.channel_id where p.id = $1',
+    'select p.*, c.tg_chat_id, c.owner_id from posts p join channels c on c.id = p.channel_id where p.id = $1',
     [id],
   );
   try {
@@ -27,7 +27,7 @@ export async function publishById(id) {
 
 /** Забирает все посты, время которых наступило. skip locked защищает от двойной публикации. */
 export async function publishDue() {
-  if (!bot) return;
+  if (!activeBots()) return;
   const { rows } = await q(
     `update posts set status = 'publishing', updated_at = now()
      where id in (
@@ -41,11 +41,12 @@ export async function publishDue() {
 
 /** Снимок числа подписчиков для графиков роста. */
 export async function snapshotStats() {
-  if (!bot) return;
-  const { rows } = await q('select id, tg_chat_id from channels where is_active');
+  if (!activeBots()) return;
+  const { rows } = await q('select id, tg_chat_id, owner_id from channels where is_active');
   for (const c of rows) {
+    if (!(await getBot(c.owner_id))) continue; // у администратора канала нет бота
     try {
-      const n = await memberCount(c.tg_chat_id);
+      const n = await memberCount(c.owner_id, c.tg_chat_id);
       await q('insert into channel_stats (channel_id, subscribers) values ($1, $2)', [c.id, n]);
       await q('update channels set subscribers_count = $2 where id = $1', [c.id, n]);
     } catch (e) {

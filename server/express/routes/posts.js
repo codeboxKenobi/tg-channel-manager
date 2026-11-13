@@ -1,10 +1,10 @@
 import { Router } from 'express';
 import { q } from '../db.js';
-import { bot } from '../bot.js';
+import { getBot } from '../bot.js';
 import { publishById } from '../scheduler.js';
 import { httpError } from '../http.js';
 import { localUpload, removeUploadIfUnused } from '../uploads.js';
-import { accessibleChannelIds, assertChannelAccess } from '../access.js';
+import { accessibleChannelIds, assertChannelAccess, workspaceId } from '../access.js';
 
 const r = Router();
 
@@ -14,9 +14,9 @@ function parse(body) {
   if (!title?.trim()) throw httpError('Укажите заголовок');
   if (!content?.trim()) throw httpError('Текст поста не может быть пустым');
   if (content.length > (media_url ? 1024 : 4096)) {
-    throw httpError(media_url ? 'Подпись к фото — не более 1024 символов' : 'Текст — не более 4096 символов');
+    throw httpError(media_url ? 'Подпись к фото или видео — не более 1024 символов' : 'Текст — не более 4096 символов');
   }
-  if (media_url && !/^https?:\/\//i.test(media_url) && !localUpload(media_url)) throw httpError('Некорректная ссылка на изображение');
+  if (media_url && !/^https?:\/\//i.test(media_url) && !localUpload(media_url)) throw httpError('Некорректная ссылка на файл');
   if (parse_mode && !['HTML', 'MarkdownV2'].includes(parse_mode)) throw httpError('Некорректный parse_mode');
   let when = null;
   if (scheduled_at) {
@@ -87,10 +87,10 @@ r.put('/:id', async (req, res) => {
 });
 
 r.post('/:id/publish', async (req, res) => {
-  if (!bot) throw httpError('BOT_TOKEN не задан: публикация недоступна', 503);
   const { rows: [pre] } = await q('select channel_id from posts where id = $1', [req.params.id]);
   if (!pre) throw httpError('Пост не найден', 404);
   await assertChannelAccess(req.user, pre.channel_id);
+  if (!(await getBot(workspaceId(req.user)))) throw httpError('Бот не подключён: администратор должен добавить токен на странице «Бот»', 503);
   const { rows } = await q(
     `update posts set status = 'publishing', updated_at = now()
      where id = $1 and status in ('draft', 'scheduled', 'failed') returning id`,
@@ -110,9 +110,8 @@ r.delete('/:id', async (req, res) => {
   );
   if (!post) throw httpError('Пост не найден', 404);
   await assertChannelAccess(req.user, post.channel_id);
-  if (req.query.tg === '1' && bot && post.status === 'published' && post.tg_message_id) {
-    await bot.telegram.deleteMessage(post.tg_chat_id, Number(post.tg_message_id)).catch(() => {});
-  }
+  const conn = req.query.tg === '1' && post.status === 'published' && post.tg_message_id ? await getBot(workspaceId(req.user)) : null;
+  if (conn) await conn.telegraf.telegram.deleteMessage(post.tg_chat_id, Number(post.tg_message_id)).catch(() => {});
   await q('delete from posts where id = $1', [req.params.id]);
   await removeUploadIfUnused(post.media_url);
   res.status(204).end();

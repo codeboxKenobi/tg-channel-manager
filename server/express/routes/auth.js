@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { Router } from 'express';
 import { q } from '../db.js';
 import { httpError } from '../http.js';
@@ -8,7 +9,7 @@ import {
 import { issueChallenge, openPasswords } from '../sealed.js';
 
 const r = Router();
-const publicUser = (u) => ({ id: u.id, email: u.email, name: u.name, role: u.role });
+const publicUser = (u) => ({ id: u.id, email: u.email, name: u.name, role: u.role, is_super: Boolean(u.is_super) });
 
 // ограничение подбора пароля: 10 неудачных попыток за 15 минут на пару IP + email
 const failures = new Map();
@@ -24,7 +25,7 @@ const getDummy = async () => (dummyHash ??= await hashPassword('dummy-password')
 r.get('/me', async (req, res) => {
   const user = await currentUser(req);
   const { rows: [{ n }] } = await q('select count(*)::int as n from users');
-  res.json({ user: user ? publicUser(user) : null, needsSetup: n === 0 });
+  res.json({ user: user ? publicUser(user) : null, needsSetup: n === 0, registration: registrationInfo() });
 });
 
 // Публичный ключ для шифрования пароля в браузере + одноразовый nonce (защита от повтора запроса)
@@ -38,14 +39,58 @@ r.post('/setup', async (req, res) => {
   const { password: plain } = openPasswords(req.body, ['password']);
   const { email, name, password } = cleanUserInput({ ...req.body, password: plain });
   const { rows: [u] } = await q(
-    `insert into users (email, name, password_hash, role)
-     select $1, $2, $3, 'admin' where not exists (select 1 from users)
-     returning id, email, name, role`,
+    `insert into users (email, name, password_hash, role, is_super)
+     select $1, $2, $3, 'admin', true where not exists (select 1 from users)
+     returning id, email, name, role, is_super`,
     [email, name, await hashPassword(password)],
   );
   if (!u) throw httpError('Администратор уже создан', 409);
   await createSession(req, res, u.id);
   res.status(201).json({ user: u });
+});
+
+// Самостоятельная регистрация: новый администратор получает собственное изолированное пространство.
+// ALLOW_REGISTRATION=false отключает её; REGISTRATION_CODE (необязательно) — код-приглашение.
+function registrationInfo() {
+  return { open: process.env.ALLOW_REGISTRATION !== 'false', code_required: Boolean((process.env.REGISTRATION_CODE ?? '').trim()) };
+}
+
+// не больше 10 попыток регистрации в час с одного IP (защита от спама и подбора кода-приглашения)
+const regAttempts = new Map();
+const REG_WINDOW = 60 * 60 * 1000;
+function regThrottled(ip) {
+  const now = Date.now();
+  if (regAttempts.size > 10000) for (const [k, v] of regAttempts) if (now - v.at[v.at.length - 1] > REG_WINDOW) regAttempts.delete(k);
+  const at = (regAttempts.get(ip)?.at ?? []).filter((t) => now - t < REG_WINDOW);
+  if (at.length >= 10) return true;
+  regAttempts.set(ip, { at: [...at, now] });
+  return false;
+}
+
+r.post('/register', async (req, res) => {
+  const info = registrationInfo();
+  if (!info.open) throw httpError('Регистрация отключена', 403);
+  if (regThrottled(req.ip ?? req.socket.remoteAddress)) throw httpError('Слишком много попыток регистрации. Повторите позже', 429);
+
+  const { password: plain, code } = openPasswords(req.body, ['password', 'code']);
+  if (info.code_required) {
+    const expected = Buffer.from(sha((process.env.REGISTRATION_CODE ?? '').trim()));
+    if (!crypto.timingSafeEqual(expected, Buffer.from(sha(String(code ?? '').trim())))) throw httpError('Неверный код приглашения', 403);
+  }
+  const { email, name, password } = cleanUserInput({ ...req.body, password: plain });
+
+  const { rows: [{ n }] } = await q('select count(*)::int as n from users');
+  if (n === 0) throw httpError('Сначала нужно создать первого администратора', 409);
+  if ((await q('select 1 from users where email = $1', [email])).rowCount) throw httpError('Этот email уже зарегистрирован', 409);
+
+  // не главный администратор (is_super = false), владельца нет: пространство создаётся вместе с аккаунтом
+  const { rows: [u] } = await q(
+    `insert into users (email, name, password_hash, role, is_super) values ($1, $2, $3, 'admin', false)
+     returning id, email, name, role, is_super`,
+    [email, name, await hashPassword(password)],
+  );
+  await createSession(req, res, u.id);
+  res.status(201).json({ user: publicUser(u) });
 });
 
 r.post('/login', async (req, res) => {

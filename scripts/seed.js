@@ -34,7 +34,7 @@ const topics = [
 let t = 0;
 const nextTopic = () => topics[t++ % topics.length];
 
-await q('truncate sessions, post_likes, channel_stats, posts, channels, users restart identity cascade');
+await q('truncate sessions, post_likes, channel_stats, parsed_posts, parser_sources, posts, channels, users restart identity cascade');
 
 // пользователи: пароль берётся из ADMIN_PASSWORD или генерируется и печатается в конце
 const pwd = () => crypto.randomBytes(9).toString('base64url');
@@ -45,8 +45,8 @@ const demoUsers = [
 const userIds = [];
 for (const u of demoUsers) {
   const { rows: [row] } = await q(
-    'insert into users (email, name, password_hash, role) values ($1, $2, $3, $4) returning id',
-    [u.email, u.name, await hashPassword(u.password), u.role],
+    'insert into users (email, name, password_hash, role, owner_id, is_super) values ($1, $2, $3, $4, $5, $6) returning id',
+    [u.email, u.name, await hashPassword(u.password), u.role, u.role === 'editor' ? userIds[0] : null, u.role === 'admin'],
   );
   userIds.push(row.id);
 }
@@ -54,9 +54,9 @@ for (const u of demoUsers) {
 let assigned = 0;
 for (const c of channels) {
   const { rows: [ch] } = await q(
-    `insert into channels (tg_chat_id, title, username, description, subscribers_count)
-     values ($1, $2, $3, $4, $5) returning id`,
-    [c.tg, c.title, c.username, c.description, c.subs],
+    `insert into channels (tg_chat_id, title, username, description, subscribers_count, owner_id)
+     values ($1, $2, $3, $4, $5, $6) returning id`,
+    [c.tg, c.title, c.username, c.description, c.subs, userIds[0]],
   );
   // редактор закреплён за первыми двумя каналами, третий видит только администратор
   if (assigned++ < 2) await q('insert into channel_users (channel_id, user_id) values ($1, $2)', [ch.id, userIds[1]]);
