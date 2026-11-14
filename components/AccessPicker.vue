@@ -15,7 +15,7 @@ const toggleAll = () => (picked.value = all.value ? [] : props.options.map((o) =
 <template>
   <div class="picker">
     <h3>{{ title }}</h3>
-    <p v-if="!options.length" class="muted" style="margin: 0 0 8px">{{ empty }}</p>
+    <p v-if="!options.length" class="muted">{{ empty }}</p>
     <template v-else>
       <label class="opt all"><input type="checkbox" :checked="all" @change="toggleAll" /><span>Выбрать все</span></label>
       <label v-for="o in options" :key="o.id" class="opt">

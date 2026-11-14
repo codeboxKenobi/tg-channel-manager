@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const { needsSetup, login, setup, registration } = useAuth()
+const { needsSetup, login, setup } = useAuth()
 const email = ref('')
 const name = ref('')
 const password = ref('')
@@ -37,12 +37,9 @@ async function submit() {
     <label>Пароль{{ needsSetup ? ' (не короче 8 символов)' : '' }}</label>
     <input v-model="password" type="password" required :minlength="needsSetup ? 8 : undefined" :autocomplete="needsSetup ? 'new-password' : 'current-password'" />
 
-    <p v-if="error" class="error" style="margin-top: 12px">{{ error }}</p>
+    <p v-if="error" class="error mt-3">{{ error }}</p>
     <div class="actions">
       <button class="primary" :disabled="busy">{{ needsSetup ? 'Создать и войти' : 'Войти' }}</button>
     </div>
-    <p v-if="!needsSetup && registration.open" class="muted" style="margin: 16px 0 0">
-      Нет аккаунта? <NuxtLink to="/register">Зарегистрироваться</NuxtLink>
-    </p>
   </form>
 </template>

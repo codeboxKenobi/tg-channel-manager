@@ -4,6 +4,7 @@ const channels = ref<any[]>([])
 const posts = ref<any[]>([])
 const channelId = ref<number | ''>('')
 const error = ref('')
+const loading = ref(true)
 
 async function load() {
   error.value = ''
@@ -12,6 +13,8 @@ async function load() {
     posts.value = await api('/posts', { query: { status: 'published', channel_id: channelId.value || undefined } })
   } catch (e: any) {
     error.value = e.message
+  } finally {
+    loading.value = false
   }
 }
 
@@ -29,11 +32,15 @@ async function remove(p: any) {
 const link = (p: any) => (p.channel_username && p.tg_message_id ? `https://t.me/${p.channel_username}/${p.tg_message_id}` : null)
 
 onMounted(load)
-watch(channelId, load)
+watch(channelId, () => {
+  loading.value = true
+  posts.value = []
+  load()
+})
 </script>
 
 <template>
-  <section>
+  <section :aria-busy="loading">
     <div class="row between head">
       <h1>Опубликованные</h1>
       <select v-model="channelId" class="filter">
@@ -43,7 +50,9 @@ watch(channelId, load)
     </div>
 
     <p v-if="error" class="error">{{ error }}</p>
-    <p v-if="!posts.length" class="muted">Опубликованных постов пока нет.</p>
+    <p v-if="!loading && !posts.length" class="muted">Опубликованных постов пока нет.</p>
+
+    <SkeletonCards v-if="loading" :count="3" :actions="2" />
 
     <article v-for="p in posts" :key="p.id" class="card">
       <div class="row between">
@@ -54,9 +63,8 @@ watch(channelId, load)
         <span class="badge published">👍 {{ fmtNum(p.likes_count) }}</span>
       </div>
       <p class="post-content">{{ p.content }}</p>
-      <video v-if="isVideoUrl(p.media_url)" :src="p.media_url" class="thumb" controls playsinline preload="metadata" />
-      <img v-else-if="p.media_url" :src="p.media_url" class="thumb" alt="" loading="lazy" @error="($event.target as HTMLImageElement).style.display = 'none'" />
-      <p class="muted" style="margin: 0">Опубликовано: {{ fmtDate(p.published_at) }}<span v-if="p.author_name"> · автор: {{ p.author_name }}</span></p>
+      <img v-if="p.media_url" :src="p.media_url" class="thumb" alt="" loading="lazy" @error="($event.target as HTMLImageElement).style.display = 'none'" />
+      <p class="muted mt-2">Опубликовано: {{ fmtDate(p.published_at) }}<span v-if="p.author_name"> · автор: {{ p.author_name }}</span></p>
       <div class="actions">
         <a v-if="link(p)" :href="link(p)!" target="_blank" rel="noopener"><button>Открыть в Telegram</button></a>
         <button class="danger" @click="remove(p)">Удалить</button>
