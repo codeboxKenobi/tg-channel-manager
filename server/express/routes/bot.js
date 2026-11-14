@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { q } from '../db.js';
 import { httpError } from '../http.js';
 import { requireRole } from '../auth.js';
-import { getBot, getMe, resetBot } from '../bot.js';
+import { getBot, getMe, resetBot, webhookStatus } from '../bot.js';
 import { encryptSecret, secretsConfigured } from '../secrets.js';
 import { openPasswords } from '../sealed.js';
 
@@ -15,12 +15,13 @@ const TOKEN_RE = /^\d{5,}:[A-Za-z0-9_-]{30,}$/;
 async function status(ownerId) {
   const base = { secrets_configured: secretsConfigured() };
   const { rows: [b] } = await q('select bot_id, bot_username, updated_at from workspace_bots where owner_id = $1', [ownerId]);
-  if (b) return { ...base, connected: true, source: 'own', bot_id: Number(b.bot_id), username: b.bot_username, updated_at: b.updated_at };
-  // главный администратор может работать на BOT_TOKEN из окружения
-  const conn = await getBot(ownerId);
+  const conn = await getBot(ownerId); // свой бот из БД или (у главного администратора) бот из BOT_TOKEN
   if (!conn) return { ...base, connected: false };
+  // способ получения событий от Telegram и состояние доставки (для webhook)
+  const delivery = { mode: conn.mode, webhook: await webhookStatus(conn) };
+  if (b) return { ...base, ...delivery, connected: true, source: 'own', bot_id: Number(b.bot_id), username: b.bot_username, updated_at: b.updated_at };
   const me = await getMe(conn.token).catch(() => null);
-  return { ...base, connected: true, source: 'env', bot_id: me?.id ?? null, username: me?.username ?? null };
+  return { ...base, ...delivery, connected: true, source: 'env', bot_id: me?.id ?? null, username: me?.username ?? null };
 }
 
 r.get('/', async (req, res) => {

@@ -64,6 +64,21 @@ onMounted(() => load().catch((e: any) => (error.value = e.message)))
         <p v-if="info.source === 'env'" class="muted" style="margin: 8px 0 0">
           Используется бот по умолчанию из настроек сервера. Подключите своего бота ниже, и он заменит его.
         </p>
+        <p v-if="info.mode === 'webhook'" style="margin: 8px 0 0">
+          События от Telegram: <b>webhook</b>
+          <span v-if="info.webhook?.registered" class="pos"> · зарегистрирован</span>
+          <span v-else class="warn"> · не зарегистрирован</span>
+          <span v-if="info.webhook?.pending" class="muted"> · в очереди: {{ info.webhook.pending }}</span>
+        </p>
+        <p v-if="info.webhook?.error" class="error" style="margin: 8px 0 0">Не удалось зарегистрировать webhook: {{ info.webhook.error }}</p>
+        <p v-if="info.webhook?.last_error" class="warn" style="margin: 8px 0 0">
+          Последняя ошибка доставки: {{ info.webhook.last_error.message }}
+          <span v-if="info.webhook.last_error.at" class="muted">({{ fmtDate(info.webhook.last_error.at) }})</span>
+          <br /><span class="muted">Telegram должен достучаться до сервера по HTTPS: проверьте PUBLIC_URL, сертификат и прокси.</span>
+        </p>
+        <p v-else-if="info.mode === 'polling'" class="muted" style="margin: 8px 0 0">
+          События от Telegram: polling (режим для разработки). Чтобы перейти на webhook, владельцу сервера нужно задать <code>PUBLIC_URL</code> с https://.
+        </p>
       </template>
     </div>
 
