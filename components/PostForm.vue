@@ -57,7 +57,7 @@ function submit() {
 
 <template>
   <form @submit.prevent="submit">
-    <h2 style="margin-top: 0">{{ post ? 'Редактирование поста' : 'Новый пост' }}</h2>
+    <h2>{{ post ? 'Редактирование поста' : 'Новый пост' }}</h2>
 
     <label>Канал</label>
     <select v-model="form.channel_id" required>
@@ -83,7 +83,7 @@ function submit() {
           </label>
           <button v-if="form.media_url" type="button" class="danger" @click="form.media_url = ''">{{ isVideo ? 'Убрать видео' : 'Убрать картинку' }}</button>
         </div>
-        <p v-if="uploadError" class="error" style="margin: 8px 0 0">{{ uploadError }}</p>
+        <p v-if="uploadError" class="error mt-2">{{ uploadError }}</p>
         <video v-if="showPreview && isVideo" :key="form.media_url" :src="form.media_url" class="preview" controls playsinline preload="metadata" />
         <img v-else-if="showPreview" :key="form.media_url" :src="form.media_url" class="preview" alt="Предпросмотр картинки" />
       </div>

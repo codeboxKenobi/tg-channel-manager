@@ -48,11 +48,11 @@ async function submit() {
       <input v-model="code" type="password" required autocomplete="off" />
     </template>
 
-    <p v-if="error" class="error" style="margin-top: 12px">{{ error }}</p>
+    <p v-if="error" class="error mt-3">{{ error }}</p>
     <div class="actions">
       <button class="primary" :disabled="busy">{{ busy ? 'Создаю…' : 'Зарегистрироваться' }}</button>
     </div>
-    <p class="muted" style="margin: 16px 0 0">Уже есть аккаунт? <NuxtLink to="/login">Войти</NuxtLink></p>
+    <p class="muted mt-4">Уже есть аккаунт? <NuxtLink to="/login">Войти</NuxtLink></p>
   </form>
 
   <div v-else class="card auth-card">

@@ -24,6 +24,7 @@ const adding = ref(false)
 const parsing = ref(false)
 const loadingPosts = ref(false)
 const creating = ref<number[]>([])
+const booting = ref(true) // первая загрузка страницы
 
 const allSelected = computed(() => sources.value.length > 0 && selected.value.length === sources.value.length)
 const hasMore = computed(() => posts.value.length < total.value)
@@ -154,17 +155,19 @@ onMounted(async () => {
     await Promise.all([loadSources(), loadPosts()])
   } catch (e: any) {
     fail(e)
+  } finally {
+    booting.value = false
   }
 })
 </script>
 
 <template>
-  <section>
+  <section :aria-busy="booting">
     <div class="row head"><h1>Парсер</h1></div>
 
     <form class="card" @submit.prevent="add">
       <h3>Добавить канал</h3>
-      <p class="muted" style="margin-top: 0">
+      <p class="muted mb-3">
         Укажите @username или ссылку на публичный канал. Парсится его открытая веб-версия (t.me/s/…), поэтому приватные каналы и каналы с отключённым просмотром не подойдут.
       </p>
       <div class="row">
@@ -174,14 +177,21 @@ onMounted(async () => {
     </form>
 
     <p v-if="error" class="error pre-line">{{ error }}</p>
-    <p v-if="info" class="pos" style="margin: 0 0 12px">
+    <p v-if="info" class="pos">
       {{ info }}
       <NuxtLink v-if="draftLink" to="/drafts">Открыть «Подготовка постов»</NuxtLink>
     </p>
 
     <div class="card">
       <h3>Каналы для парсинга</h3>
-      <p v-if="!sources.length" class="muted" style="margin: 0">Каналов пока нет. Добавьте первый выше.</p>
+      <div v-if="booting" aria-hidden="true">
+        <div v-for="n in 3" :key="n" class="src-row">
+          <Skeleton width="18px" height="18px" radius="4px" />
+          <div class="sk-cell"><Skeleton :width="n === 2 ? '48%' : '64%'" height="16px" /></div>
+          <Skeleton width="84px" height="41px" radius="8px" />
+        </div>
+      </div>
+      <p v-else-if="!sources.length" class="muted">Каналов пока нет. Добавьте первый выше.</p>
       <template v-else>
         <label class="opt all"><input type="checkbox" :checked="allSelected" @change="toggleAll" /><span>Выбрать все</span></label>
         <div v-for="s in sources" :key="s.id" class="src-row">
@@ -206,11 +216,11 @@ onMounted(async () => {
             {{ parsing ? 'Парсинг…' : `Спарсить выбранные (${selected.length})` }}
           </button>
         </div>
-        <p class="muted" style="margin: 8px 0 0; font-size: 13px">Чем больше постов, тем дольше загрузка. Уже сохранённые посты не дублируются. Берутся текст, фото и видео. Из текста удаляются ссылки, @упоминания, хештеги и рекламные подписи; посты без текста пропускаются.</p>
+        <p class="muted small mt-2">Чем больше постов, тем дольше загрузка. Уже сохранённые посты не дублируются. Берутся текст, фото и видео. Из текста удаляются ссылки, @упоминания, хештеги и рекламные подписи; посты без текста пропускаются.</p>
       </template>
     </div>
 
-    <div class="row between head" style="margin-top: 24px">
+    <div class="row between head mt-5">
       <h1 style="font-size: 18px">Спарсенные посты<span v-if="total" class="muted"> · {{ fmtNum(total) }}</span></h1>
       <div class="row">
         <select v-model="filterSource" class="filter" aria-label="Фильтр по каналу-источнику">
@@ -222,17 +232,19 @@ onMounted(async () => {
     </div>
 
     <div class="card">
-      <label style="margin-top: 0">Канал публикации для кнопки «Сформировать пост»</label>
-      <select v-model="targetId" :disabled="!channels.length">
-        <option v-if="!channels.length" value="">Нет доступных каналов</option>
+      <label>Канал публикации для кнопки «Сформировать пост»</label>
+      <select v-model="targetId" :disabled="booting || !channels.length">
+        <option v-if="!booting && !channels.length" value="">Нет доступных каналов</option>
         <option v-for="c in channels" :key="c.id" :value="c.id">{{ c.title }}</option>
       </select>
-      <p v-if="!channels.length" class="muted" style="margin: 8px 0 0">Каналов для публикации нет: подключите канал на странице «Каналы» или попросите администратора выдать доступ.</p>
+      <p v-if="!booting && !channels.length" class="muted mt-2">Каналов для публикации нет: подключите канал на странице «Каналы» или попросите администратора выдать доступ.</p>
     </div>
 
     <p v-if="sources.length && !posts.length && !loadingPosts" class="muted">
       {{ search || filterSource ? 'По фильтру ничего не найдено.' : 'Спарсенных постов пока нет. Выберите каналы и нажмите «Спарсить выбранные».' }}
     </p>
+
+    <SkeletonCards v-if="booting || (loadingPosts && !posts.length)" :count="3" :actions="2" />
 
     <article v-for="p in posts" :key="p.id" class="card">
       <div class="row between">

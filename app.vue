@@ -21,15 +21,19 @@ async function out() {
 <template>
   <div>
     <header v-if="showNav" class="top">
-      <div class="brand">Менеджер каналов</div>
       <button class="burger" type="button" :aria-expanded="menuOpen" aria-controls="menu" aria-label="Меню" @click="menuOpen = !menuOpen">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
           <path v-if="!menuOpen" d="M4 7h16M4 12h16M4 17h16" />
           <path v-else d="M6 6l12 12M18 6L6 18" />
         </svg>
       </button>
-      <div id="menu" class="menu" :class="{ open: menuOpen }">
-        <nav>
+      <div class="brand">Менеджер каналов</div>
+      <div class="user">
+        <NuxtLink to="/account" class="who">{{ user?.name }}</NuxtLink>
+        <button type="button" @click="out">Выйти</button>
+      </div>
+      <Transition name="menu">
+        <nav v-show="menuOpen" id="menu" class="menu" aria-label="Разделы" @click="menuOpen = false">
           <NuxtLink to="/">Каналы</NuxtLink>
           <NuxtLink to="/parser">Парсер</NuxtLink>
           <NuxtLink to="/drafts">Подготовка постов</NuxtLink>
@@ -37,11 +41,10 @@ async function out() {
           <NuxtLink to="/metrics">Метрики</NuxtLink>
           <NuxtLink v-if="isAdmin" to="/bot">Бот</NuxtLink>
           <NuxtLink v-if="isAdmin" to="/users">Пользователи</NuxtLink>
+          <hr class="menu-sep" />
+          <NuxtLink to="/guide">Руководство пользователя</NuxtLink>
         </nav>
-        <div class="sp" />
-        <NuxtLink to="/account" class="who">{{ user?.name }}</NuxtLink>
-        <button type="button" @click="out">Выйти</button>
-      </div>
+      </Transition>
     </header>
     <div v-if="showNav && menuOpen" class="backdrop" @click="menuOpen = false" />
     <main><NuxtPage /></main>

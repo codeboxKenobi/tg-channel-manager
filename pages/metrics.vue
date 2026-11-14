@@ -7,6 +7,7 @@ const subscribers = ref<any[]>([])
 const top = ref<any[]>([])
 const channelId = ref<number | ''>('')
 const error = ref('')
+const loading = ref(true)
 
 let requestId = 0 // защита от гонки: учитываем только ответ последнего запроса
 
@@ -30,6 +31,8 @@ async function load() {
     top.value = tp
   } catch (e: any) {
     if (current === requestId) error.value = e.message
+  } finally {
+    if (current === requestId) loading.value = false
   }
 }
 
@@ -50,11 +53,14 @@ const visibleChannels = computed(() => (channelId.value ? channels.value.filter(
 const scopeLabel = computed(() => (selected.value ? `«${selected.value.title}»` : 'во всех каналах'))
 
 onMounted(load)
-watch(channelId, load)
+watch(channelId, () => {
+  loading.value = true
+  load()
+})
 </script>
 
 <template>
-  <section>
+  <section :aria-busy="loading">
     <div class="row between head">
       <h1>Метрики</h1>
       <select v-model="channelId" class="filter">
@@ -64,7 +70,13 @@ watch(channelId, load)
     </div>
     <p v-if="error" class="error">{{ error }}</p>
 
-    <div v-if="overview" class="grid">
+    <div v-if="loading" class="grid" aria-hidden="true">
+      <div v-for="n in 5" :key="n" class="card stat">
+        <Skeleton width="56%" height="26px" />
+        <Skeleton class="mt-2" width="84%" height="13px" />
+      </div>
+    </div>
+    <div v-else-if="overview" class="grid">
       <div class="card stat"><b>{{ fmtNum(overview.subscribers) }}</b><span>Подписчиков {{ scopeLabel }}</span></div>
       <div class="card stat"><b>{{ fmtNum(overview.published) }}</b><span>Опубликовано постов</span></div>
       <div class="card stat"><b>{{ fmtNum(overview.likes) }}</b><span>Лайков всего</span></div>
@@ -74,13 +86,19 @@ watch(channelId, load)
 
     <h2>Динамика за 30 дней</h2>
     <div class="charts">
-      <BarChart title="Публикации по дням" :items="postsSeries" :summary="postsTotal" />
-      <BarChart title="Лайки по дням" :items="likesSeries" :summary="likesTotal" />
-      <BarChart title="Подписчики" :items="subsSeries" :summary="subsLast" from-min />
+      <template v-if="loading">
+        <SkeletonChart v-for="n in 3" :key="n" />
+      </template>
+      <template v-else>
+        <BarChart title="Публикации по дням" :items="postsSeries" :summary="postsTotal" />
+        <BarChart title="Лайки по дням" :items="likesSeries" :summary="likesTotal" />
+        <BarChart title="Подписчики" :items="subsSeries" :summary="subsLast" from-min />
+      </template>
     </div>
 
     <h2>{{ selected ? 'Канал' : 'Каналы' }}</h2>
-    <div class="card table-wrap">
+    <SkeletonTable v-if="loading" :rows="3" :cols="6" />
+    <div v-else class="card table-wrap">
       <table class="stack">
         <thead>
           <tr>
@@ -102,8 +120,9 @@ watch(channelId, load)
     </div>
 
     <h2>Лучшие посты по лайкам</h2>
-    <div class="card table-wrap">
-      <p v-if="!top.length" class="muted" style="margin: 0">Опубликованных постов пока нет.</p>
+    <SkeletonTable v-if="loading" :rows="5" :cols="4" />
+    <div v-else class="card table-wrap">
+      <p v-if="!top.length" class="muted">Опубликованных постов пока нет.</p>
       <table v-else class="stack">
         <thead><tr><th>Пост</th><th>Канал</th><th>Дата</th><th class="num">Лайки</th></tr></thead>
         <tbody>

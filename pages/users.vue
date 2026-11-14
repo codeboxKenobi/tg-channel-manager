@@ -9,11 +9,16 @@ const adminForm = reactive({ email: '', name: '', password: '' })
 const error = ref('')
 const busy = ref(false)
 const accessFor = ref<any | null>(null)
+const loading = ref(true)
 
 async function load() {
-  users.value = await api('/users')
-  channels.value = await api('/channels')
-  admins.value = isSuper.value ? await api('/users/admins') : []
+  try {
+    users.value = await api('/users')
+    channels.value = await api('/channels')
+    admins.value = isSuper.value ? await api('/users/admins') : []
+  } finally {
+    loading.value = false
+  }
 }
 async function run(fn: () => Promise<any>) {
   error.value = ''
@@ -61,7 +66,7 @@ onMounted(() => run(async () => {}))
 </script>
 
 <template>
-  <section>
+  <section :aria-busy="loading">
     <div class="row head"><h1>Пользователи</h1></div>
 
     <form class="card" @submit.prevent="create('editor', editorForm)">
@@ -88,9 +93,10 @@ onMounted(() => run(async () => {}))
       />
     </div>
 
-    <h3 style="margin: 20px 0 8px">Мои редакторы</h3>
-    <div class="card table-wrap">
-      <p v-if="!users.length" class="muted" style="margin: 0">Редакторов пока нет.</p>
+    <h3 class="section-title">Мои редакторы</h3>
+    <SkeletonTable v-if="loading" :rows="3" :cols="4" />
+    <div v-else class="card table-wrap">
+      <p v-if="!users.length" class="muted">Редакторов пока нет.</p>
       <table v-else class="stack">
         <thead><tr><th>Имя</th><th>Email</th><th>Каналы</th><th>Создан</th><th /></tr></thead>
         <tbody>
@@ -113,10 +119,10 @@ onMounted(() => run(async () => {}))
     </div>
 
     <template v-if="isSuper">
-      <h3 style="margin: 28px 0 8px">Администраторы</h3>
+      <h3 class="section-title">Администраторы</h3>
       <form class="card" @submit.prevent="create('admin', adminForm)">
         <h3>Новый администратор</h3>
-        <p class="muted" style="margin-top: 0">У каждого администратора своё изолированное пространство: свои каналы, редакторы и источники парсера. Вы их не увидите.</p>
+        <p class="muted mb-3">У каждого администратора своё изолированное пространство: свои каналы, редакторы и источники парсера. Вы их не увидите.</p>
         <div class="row" style="align-items: flex-end">
           <div style="flex: 2; min-width: 200px"><label>Email</label><input v-model="adminForm.email" type="email" required /></div>
           <div style="flex: 1; min-width: 150px"><label>Имя</label><input v-model="adminForm.name" required /></div>
@@ -125,7 +131,8 @@ onMounted(() => run(async () => {}))
         </div>
       </form>
 
-      <div class="card table-wrap">
+      <SkeletonTable v-if="loading" :rows="3" :cols="5" />
+      <div v-else class="card table-wrap">
         <table class="stack">
           <thead><tr><th>Имя</th><th>Email</th><th>Каналов</th><th>Редакторов</th><th>Создан</th><th /></tr></thead>
           <tbody>

@@ -40,28 +40,32 @@ onMounted(() => load().catch((e: any) => (error.value = e.message)))
 </script>
 
 <template>
-  <section>
+  <section :aria-busy="!info && !error">
     <div class="row head"><h1>Бот</h1></div>
 
     <p v-if="error" class="error">{{ error }}</p>
-    <p v-if="ok" class="pos" style="margin: 0 0 12px">{{ ok }}</p>
+    <p v-if="ok" class="pos">{{ ok }}</p>
     <p v-if="info && !info.secrets_configured" class="error">
       На сервере не задан <code>SECRETS_KEY</code>: токен бота негде безопасно хранить, подключить его пока нельзя. Обратитесь к владельцу сервера.
     </p>
 
     <div class="card">
       <h3>Статус</h3>
-      <p v-if="!info" class="muted" style="margin: 0">Загрузка…</p>
-      <p v-else-if="!info.connected" class="warn" style="margin: 0">
+      <div v-if="!info && !error" aria-hidden="true">
+        <Skeleton width="60%" height="20px" />
+        <Skeleton class="mt-2" width="40%" height="14px" />
+      </div>
+      <p v-else-if="!info" class="muted">Статус недоступен.</p>
+      <p v-else-if="!info.connected" class="warn">
         Бот не подключён: публикация, сбор статистики и подключение каналов по @username недоступны.
       </p>
       <template v-else>
-        <p style="margin: 0">
+        <p>
           Подключён
           <b v-if="info.username">@{{ info.username }}</b>
           <span v-if="info.updated_at" class="muted"> · обновлён {{ fmtDate(info.updated_at) }}</span>
         </p>
-        <p v-if="info.source === 'env'" class="muted" style="margin: 8px 0 0">
+        <p v-if="info.source === 'env'" class="muted mt-2">
           Используется бот по умолчанию из настроек сервера. Подключите своего бота ниже, и он заменит его.
         </p>
       </template>
@@ -69,7 +73,7 @@ onMounted(() => load().catch((e: any) => (error.value = e.message)))
 
     <form class="card" @submit.prevent="save">
       <h3>{{ info?.source === 'own' ? 'Заменить бота' : 'Подключить бота' }}</h3>
-      <p class="muted" style="margin-top: 0">
+      <p class="muted mb-3">
         Создайте бота у @BotFather и вставьте его токен. Токен хранится на сервере в зашифрованном виде, виден только вам и не показывается после сохранения.
         У каждого администратора свой бот, поэтому ваши каналы и публикации недоступны другим.
       </p>
@@ -85,12 +89,12 @@ onMounted(() => load().catch((e: any) => (error.value = e.message)))
 
     <div class="card">
       <h3>Как подключить канал</h3>
-      <ol style="margin: 0; padding-left: 20px; line-height: 1.7">
+      <ol class="steps">
         <li>Подключите бота выше.</li>
         <li>Добавьте этого бота администратором своего канала с правом публикации сообщений.</li>
         <li>На странице «Каналы» укажите @username или числовой id канала.</li>
       </ol>
-      <p class="muted" style="margin: 12px 0 0">
+      <p class="muted mt-3">
         Если заменить бота, под старыми постами «лайки» работать перестанут (кнопки привязаны к прежнему боту), а новый бот нужно заново добавить администратором в каналы.
       </p>
     </div>
