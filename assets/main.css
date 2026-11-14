@@ -44,7 +44,7 @@ p:last-child { margin-bottom: 0; }
 :where(.card) p { margin-bottom: 0; }
 .row { display: flex; gap: var(--s-3); align-items: center; flex-wrap: wrap; }
 .between { justify-content: space-between; }
-.head { margin-bottom: var(--s-4); }
+.head { margin-bottom: var(--s-4); min-height: 42px; } /* одинаковая высота шапки страницы с фильтром и без него: заголовок не «прыгает» */
 .filter { width: 210px; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: var(--s-4); margin-bottom: var(--s-3); }
 .grid { display: grid; gap: var(--s-3); grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); margin-bottom: var(--s-3); }
@@ -161,7 +161,7 @@ td.actions-cell button + button { margin-left: var(--s-2); }
   button { min-height: 42px; }
   button.chip { min-height: 34px; }
 
-  .head { flex-direction: column; align-items: stretch; }
+  .head { flex-direction: column; align-items: stretch; min-height: 0; }
   .head > .row { width: 100%; }
   .head .filter { width: 100%; flex: 1 1 100%; }
   .head .row > button { flex: 1 1 100%; }
