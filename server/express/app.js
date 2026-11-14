@@ -9,6 +9,7 @@ import uploads from './routes/uploads.js';
 import metrics from './routes/metrics.js';
 import parser from './routes/parser.js';
 import botRoute from './routes/bot.js';
+import telegramRoute from './routes/telegram.js';
 
 export const app = express();
 app.disable('x-powered-by');
@@ -19,6 +20,7 @@ app.use(csrfGuard);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, bot: activeBots() > 0 }));
 app.use('/api/auth', auth); // публичные: me, setup, login, logout
+app.use('/api/telegram', telegramRoute); // webhook Telegram: публичный, защищён секретом в заголовке
 
 app.use('/api', requireAuth); // всё ниже — только для вошедших
 app.use('/api/users', users);

@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import https from 'node:https';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -10,8 +11,26 @@ import { decryptSecret } from './secrets.js';
 // У каждого администратора свой бот (токен в workspace_bots, зашифрован). Его каналы, публикации, статистика и лайки
 // идут только через него, поэтому изоляция действует и на стороне Telegram.
 // BOT_TOKEN из окружения — бот по умолчанию для главного администратора, пока он не подключил своего.
+//
+// События (нажатия «лайк») приходят от Telegram через webhook: POST на PUBLIC_URL/api/telegram/<id администратора>,
+// запрос подтверждается секретом из заголовка X-Telegram-Bot-Api-Secret-Token. Без публичного HTTPS-адреса (локальная
+// разработка) бот работает через long polling. BOT_MODE=polling принудительно включает polling.
 
-const registry = (globalThis.__tgmBots ??= new Map()); // ownerId → Promise<{ ownerId, token, telegraf } | null>
+const registry = (globalThis.__tgmBots ??= new Map()); // ownerId → Promise<{ ownerId, token, telegraf, mode, ready, error } | null>
+const ALLOWED_UPDATES = ['callback_query'];
+
+export const publicUrl = () => (process.env.PUBLIC_URL ?? '').trim().replace(/\/+$/, '');
+
+/** 'webhook', если задан PUBLIC_URL с https:// (и BOT_MODE не требует polling), иначе 'polling'. */
+export function botMode() {
+  if ((process.env.BOT_MODE ?? '').trim().toLowerCase() === 'polling') return 'polling';
+  return /^https:\/\/[^/\s]+/i.test(publicUrl()) ? 'webhook' : 'polling';
+}
+
+export const webhookUrl = (ownerId) => `${publicUrl()}/api/telegram/${ownerId}`;
+
+/** Секрет webhook (заголовок X-Telegram-Bot-Api-Secret-Token): производная от токена бота, в БД не хранится. */
+export const webhookSecret = (token, ownerId) => crypto.createHmac('sha256', token).update(`tgm-webhook:${ownerId}`).digest('base64url');
 
 // токен не должен попадать ни в логи, ни в интерфейс (он есть в URL запросов к Bot API)
 const redact = (s) => String(s ?? '').replace(/bot\d+:[A-Za-z0-9_-]{20,}/g, 'bot***');
@@ -42,8 +61,22 @@ const onLike = (ownerId) => async (ctx) => {
 function connect(ownerId, token) {
   const telegraf = new Telegraf(token, { telegram: { agent: new https.Agent({ keepAlive: false, family: 4 }) } });
   telegraf.action(/^like:(\d+)$/, onLike(ownerId));
-  telegraf.launch({ allowedUpdates: ['callback_query'] }).catch((e) => console.error(`Ошибка запуска бота (пространство ${ownerId}):`, redact(e.message)));
-  return { ownerId, token, telegraf };
+  const mode = botMode();
+  const conn = { ownerId, token, telegraf, mode, error: null, ready: Promise.resolve() };
+  const failed = (what) => (e) => {
+    conn.error = redact(e.message);
+    console.error(`${what} (пространство ${ownerId}):`, conn.error);
+  };
+  if (mode === 'webhook') {
+    // повторная регистрация при каждом старте безопасна: Telegram просто обновляет адрес и секрет
+    conn.ready = telegraf.telegram
+      .callApi('setWebhook', { url: webhookUrl(ownerId), secret_token: webhookSecret(token, ownerId), allowed_updates: ALLOWED_UPDATES, max_connections: 10 })
+      .then(() => {})
+      .catch(failed('Не удалось зарегистрировать webhook'));
+  } else {
+    telegraf.launch({ allowedUpdates: ALLOWED_UPDATES }).catch(failed('Ошибка запуска бота')); // launch сам снимает старый webhook
+  }
+  return conn;
 }
 
 async function superId() {
@@ -83,15 +116,57 @@ const stopConn = (c) => {
   }
 };
 
-/** Забывает бота пространства (после смены или удаления токена); следующий getBot создаст нового. */
+/** Забывает бота пространства (после смены или удаления токена); следующий getBot создаст нового. Старый webhook снимается. */
 export async function resetBot(ownerId) {
   const p = registry.get(ownerId);
   registry.delete(ownerId);
-  stopConn(await p?.catch(() => null));
+  const conn = await p?.catch(() => null);
+  if (conn?.mode === 'webhook') await conn.telegraf.telegram.callApi('deleteWebhook', {}).catch(() => {});
+  stopConn(conn);
 }
 
 export const activeBots = () => registry.size;
 
+// запросы с несуществующим id администратора не должны каждый раз ходить в БД
+const missing = new Map();
+
+/**
+ * Принимает обновление от Telegram для бота пространства ownerId. Возвращает false, если запрос не наш:
+ * нет такого бота, бот не в режиме webhook или неверный секрет. Обработка идёт в фоне, Telegram получает ответ сразу.
+ */
+export async function acceptUpdate(ownerId, secret, update) {
+  if (!Number.isInteger(ownerId) || typeof secret !== 'string' || !secret) return false;
+  if (!update || typeof update !== 'object' || !Number.isInteger(update.update_id)) return false;
+  if (!registry.has(ownerId) && (missing.get(ownerId) ?? 0) > Date.now()) return false;
+
+  const conn = await getBot(ownerId);
+  if (!conn) {
+    if (missing.size > 1000) missing.clear();
+    missing.set(ownerId, Date.now() + 10_000);
+    return false;
+  }
+  if (conn.mode !== 'webhook') return false;
+  const digest = (v) => crypto.createHash('sha256').update(v).digest();
+  if (!crypto.timingSafeEqual(digest(secret), digest(webhookSecret(conn.token, ownerId)))) return false;
+
+  conn.telegraf.handleUpdate(update).catch((e) => console.error(`Ошибка обработки обновления (пространство ${ownerId}):`, redact(e.message)));
+  return true;
+}
+
+/** Состояние доставки обновлений для страницы «Бот» (null в режиме polling). */
+export async function webhookStatus(conn) {
+  if (conn.mode !== 'webhook') return null;
+  await conn.ready;
+  const info = await conn.telegraf.telegram.callApi('getWebhookInfo', {}).catch(() => null);
+  return {
+    registered: Boolean(info && info.url === webhookUrl(conn.ownerId)),
+    pending: info?.pending_update_count ?? null,
+    last_error: info?.last_error_message
+      ? { message: redact(info.last_error_message), at: info.last_error_date ? new Date(info.last_error_date * 1000).toISOString() : null }
+      : null,
+    error: conn.error,
+  };
+}
 /** Проверка токена у Telegram: возвращает { id, username, is_bot }. */
 export async function getMe(token) {
   let res;
@@ -172,8 +247,12 @@ export async function startBot() {
     const owners = new Set(rows.map((r) => r.owner_id));
     const sid = process.env.BOT_TOKEN ? await superId() : null;
     if (sid) owners.add(sid);
+    const mode = botMode();
+    if ((process.env.BOT_MODE ?? '').trim().toLowerCase() !== 'polling' && mode === 'polling' && owners.size) {
+      console.warn('PUBLIC_URL не задан или не начинается с https://: боты работают через polling. Для продакшена задайте PUBLIC_URL, и они перейдут на webhook');
+    }
     for (const id of owners) await getBot(id);
-    if (registry.size) console.log(`Запущено ботов: ${registry.size}`);
+    if (registry.size) console.log(`Запущено ботов: ${registry.size} (${mode})`);
     else console.warn('Ни у одного администратора не подключён бот: публикация и сбор статистики отключены');
   } catch (e) {
     console.error('Ошибка запуска ботов:', redact(e.message));
