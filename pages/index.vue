@@ -8,10 +8,15 @@ const title = ref('')
 const error = ref('')
 const busy = ref(false)
 const accessFor = ref<number | null>(null)
+const loading = ref(true)
 
 async function load() {
-  channels.value = await api('/channels')
-  if (isAdmin.value) editors.value = (await api<any[]>('/users')).filter((u) => u.role === 'editor')
+  try {
+    channels.value = await api('/channels')
+    if (isAdmin.value) editors.value = (await api<any[]>('/users')).filter((u) => u.role === 'editor')
+  } finally {
+    loading.value = false
+  }
 }
 async function run(fn: () => Promise<any>) {
   error.value = ''
@@ -50,12 +55,12 @@ onMounted(() => run(async () => {}))
 </script>
 
 <template>
-  <section>
+  <section :aria-busy="loading">
     <div class="row head"><h1>Каналы</h1></div>
 
     <form v-if="isAdmin" class="card" @submit.prevent="add">
       <h3>Подключить канал</h3>
-      <p class="muted" style="margin-top: 0">
+      <p class="muted mb-3">
         Добавьте бота администратором канала с правом публикации, затем укажите @username или числовой id канала.
       </p>
       <div class="row">
@@ -66,24 +71,26 @@ onMounted(() => run(async () => {}))
     </form>
 
     <p v-if="error" class="error">{{ error }}</p>
-    <p v-if="!channels.length" class="muted">
+    <p v-if="!loading && !channels.length" class="muted">
       {{ isAdmin ? 'Каналов пока нет. Подключите первый выше.' : 'Вам пока не назначены каналы. Обратитесь к администратору.' }}
     </p>
+
+    <SkeletonCards v-if="loading" :count="3" :actions="isAdmin ? 4 : 1" />
 
     <article v-for="c in channels" :key="c.id" class="card">
       <div class="row between">
         <div>
           <strong>{{ c.title }}</strong>
           <span class="muted"> {{ c.username ? '@' + c.username : 'приватный канал' }}</span>
-          <span v-if="!c.is_active" class="badge" style="margin-left: 8px">Отключён</span>
+          <span v-if="!c.is_active" class="badge ml-2">Отключён</span>
         </div>
         <div class="muted">{{ fmtNum(c.subscribers_count) }} подписчиков</div>
       </div>
-      <p v-if="c.description" class="muted" style="margin: 6px 0 0">{{ c.description }}</p>
-      <p style="margin: 8px 0 0">
+      <p v-if="c.description" class="muted mt-2">{{ c.description }}</p>
+      <p class="mt-2">
         Опубликовано: <b>{{ c.published_count }}</b> · В подготовке: <b>{{ c.pending_count }}</b>
       </p>
-      <p v-if="isAdmin" class="muted" style="margin: 8px 0 0">
+      <p v-if="isAdmin" class="muted mt-2">
         Доступ:
         <span v-if="!c.assigned_users.length">только администраторы</span>
         <span v-else class="chips-inline"><span v-for="u in c.assigned_users" :key="u.id" class="tagchip">{{ u.name }}</span></span>

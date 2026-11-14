@@ -8,6 +8,7 @@ const editing = ref<any | null>(null)
 const creating = ref(false)
 const error = ref('')
 const busy = ref(false)
+const loading = ref(true)
 
 const STATUS: Record<string, string> = {
   draft: 'Черновик',
@@ -17,10 +18,14 @@ const STATUS: Record<string, string> = {
 }
 
 async function load() {
-  channels.value = await api('/channels')
-  posts.value = await api('/posts', {
-    query: { status: 'draft,scheduled,publishing,failed', channel_id: channelId.value || undefined },
-  })
+  try {
+    channels.value = await api('/channels')
+    posts.value = await api('/posts', {
+      query: { status: 'draft,scheduled,publishing,failed', channel_id: channelId.value || undefined },
+    })
+  } finally {
+    loading.value = false
+  }
 }
 async function run(fn: () => Promise<any>) {
   error.value = ''
@@ -70,11 +75,15 @@ onMounted(() => {
   timer = setInterval(() => load().catch(() => {}), 30000)
 })
 onBeforeUnmount(() => clearInterval(timer))
-watch(channelId, () => load().catch((e) => (error.value = e.message)))
+watch(channelId, () => {
+  loading.value = true
+  posts.value = []
+  load().catch((e) => (error.value = e.message))
+})
 </script>
 
 <template>
-  <section>
+  <section :aria-busy="loading">
     <div class="row between head">
       <h1>Подготовка постов</h1>
       <div class="row">
@@ -86,14 +95,16 @@ watch(channelId, () => load().catch((e) => (error.value = e.message)))
       </div>
     </div>
 
-    <p v-if="!channels.length" class="muted">{{ isAdmin ? 'Сначала подключите канал на странице «Каналы».' : 'Вам пока не назначены каналы. Обратитесь к администратору.' }}</p>
+    <p v-if="!loading && !channels.length" class="muted">{{ isAdmin ? 'Сначала подключите канал на странице «Каналы».' : 'Вам пока не назначены каналы. Обратитесь к администратору.' }}</p>
     <p v-if="error" class="error">{{ error }}</p>
 
     <div v-if="creating || editing" class="card">
       <PostForm :key="editing?.id ?? 'new'" :channels="channels" :post="editing" @save="save" @cancel="closeForm" />
     </div>
 
-    <p v-if="channels.length && !posts.length" class="muted">Постов в подготовке нет. Создайте новый.</p>
+    <p v-if="!loading && channels.length && !posts.length" class="muted">Постов в подготовке нет. Создайте новый.</p>
+
+    <SkeletonCards v-if="loading" :count="3" :actions="4" />
 
     <article v-for="p in posts" :key="p.id" class="card">
       <div class="row between">
@@ -104,11 +115,10 @@ watch(channelId, () => load().catch((e) => (error.value = e.message)))
         <span class="badge" :class="p.status">{{ STATUS[p.status] }}</span>
       </div>
       <p class="post-content">{{ p.content }}</p>
-      <video v-if="isVideoUrl(p.media_url)" :src="p.media_url" class="thumb" controls playsinline preload="metadata" />
-      <img v-else-if="p.media_url" :src="p.media_url" class="thumb" alt="" loading="lazy" @error="($event.target as HTMLImageElement).style.display = 'none'" />
-      <p v-if="p.scheduled_at" class="muted" style="margin: 0">Публикация: {{ fmtDate(p.scheduled_at) }}</p>
-      <p v-if="p.author_name" class="muted" style="margin: 4px 0 0">Автор: {{ p.author_name }}</p>
-      <p v-if="p.error" class="error" style="margin: 4px 0 0">{{ p.error }}</p>
+      <img v-if="p.media_url" :src="p.media_url" class="thumb" alt="" loading="lazy" @error="($event.target as HTMLImageElement).style.display = 'none'" />
+      <p v-if="p.scheduled_at" class="muted mt-2">Публикация: {{ fmtDate(p.scheduled_at) }}</p>
+      <p v-if="p.author_name" class="muted mt-2">Автор: {{ p.author_name }}</p>
+      <p v-if="p.error" class="error mt-2">{{ p.error }}</p>
       <div class="actions">
         <button :disabled="busy || p.status === 'publishing'" @click="startEdit(p)">Редактировать</button>
         <button class="primary" :disabled="busy || p.status === 'publishing'" @click="publishNow(p)">Опубликовать сейчас</button>
