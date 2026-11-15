@@ -18,6 +18,10 @@ html { -webkit-text-size-adjust: 100%; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.55 "Segoe UI", system-ui, -apple-system, sans-serif; }
 img { max-width: 100%; }
 
+/* ссылки: без подчёркивания, цвет акцента (как у логотипа); у ссылок в меню и оглавлении свои стили ниже */
+a { color: var(--accent); text-decoration: none; }
+a:hover { color: color-mix(in srgb, var(--accent) 75%, var(--text)); text-decoration: none; }
+
 /* ---------- шапка и меню ---------- */
 /* Бургер всегда слева перед логотипом, пользователь и «Выйти» справа. Края шапки и выпадающего меню лежат
    на тех же вертикалях, что левый и правый край карточек (--edge), на любой ширине экрана. */
