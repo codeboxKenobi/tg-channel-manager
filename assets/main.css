@@ -86,6 +86,8 @@ button:disabled { opacity: .5; cursor: default; }
 .actions { display: flex; gap: var(--s-2); flex-wrap: wrap; margin-top: var(--s-3); }
 .auth-card { max-width: 380px; margin: var(--s-8) auto; }
 .auth-card h1 { margin-bottom: var(--s-3); }
+.auth-brand { display: flex; align-items: center; justify-content: center; gap: var(--s-3); margin-bottom: var(--s-5); font-size: 20px; font-weight: 600; }
+.auth-logo { display: block; height: 40px; width: auto; }
 
 /* вспомогательные отступы (идут после .error и т.п., чтобы переопределять их) */
 .mt-1 { margin-top: var(--s-1); }

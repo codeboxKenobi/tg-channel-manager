@@ -23,6 +23,7 @@ async function submit() {
 
 <template>
   <form class="card auth-card" @submit.prevent="submit">
+    <AuthBrand />
     <h1>{{ needsSetup ? 'Создание администратора' : 'Вход' }}</h1>
     <p v-if="needsSetup" class="muted">Пользователей пока нет. Эта учётная запись станет администратором.</p>
 
