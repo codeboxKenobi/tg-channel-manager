@@ -33,7 +33,7 @@ export function uploadFile(file: Blob, contentType: string, onProgress?: (percen
       }
       if (xhr.status >= 200 && xhr.status < 300 && data?.url) return resolve(data)
       if (data?.error) return fail(data.error, xhr.status)
-      if (xhr.status === 413) return fail('Сервер отклонил файл как слишком большой. Администратору сервера: в nginx задайте client_max_body_size 50m', 413)
+      if (xhr.status === 413) return fail('Файл отклонен как слишком большой.', 413)
       if (xhr.status === 401) return fail('Сессия истекла. Войдите заново', 401)
       fail(`Не удалось загрузить файл (код ${xhr.status})`, xhr.status)
     }
