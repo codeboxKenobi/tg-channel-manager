@@ -259,3 +259,4 @@ button.link { min-height: 0; padding: 0; border: 0; background: none; color: var
   .src-row { align-items: flex-start; }
   .parse-bar select, .parse-bar button { flex: 1 1 100%; }
 }
+progress.upload-progress { display: block; width: 100%; height: 8px; margin-top: 10px; accent-color: var(--accent); }

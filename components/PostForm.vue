@@ -19,6 +19,7 @@ const showPreview = computed(() => isUploaded.value || /^https?:\/\//i.test(form
 const isVideo = computed(() => isVideoUrl(form.media_url))
 const limit = computed(() => (form.media_url ? 1024 : 4096))
 const uploading = ref(false)
+const progress = ref(0)
 const uploadError = ref('')
 
 async function onFile(e: Event) {
@@ -28,18 +29,32 @@ async function onFile(e: Event) {
   if (!file) return
   uploadError.value = ''
   uploading.value = true
+  progress.value = 0
   try {
-    const blob = await toJpeg(file)
-    const { url } = await api<{ url: string }>('/uploads', {
-      method: 'POST',
-      body: blob,
-      headers: { 'Content-Type': 'image/jpeg' },
-    })
-    form.media_url = url
+    if (looksLikeVideo(file)) {
+      // видео уходит как есть (без перекодирования), с индикатором прогресса
+      if (!isMp4File(file)) throw new Error('Поддерживается только видео MP4 (H.264). Видео с iPhone (.mov) и другие форматы сначала сохраните или экспортируйте как MP4')
+      if (!file.size) throw new Error('Файл пустой')
+      if (file.size > MAX_VIDEO_BYTES) throw new Error(`Видео ${Math.ceil(file.size / 1048576)} МБ: Telegram принимает от бота файлы до 50 МБ`)
+      form.media_url = (await uploadFile(file, 'video/mp4', (p) => (progress.value = p))).url
+    } else {
+      const blob = await toJpeg(file)
+      const { url } = await api<{ url: string }>('/uploads', {
+        method: 'POST',
+        body: blob,
+        headers: { 'Content-Type': 'image/jpeg' },
+      })
+      form.media_url = url
+    }
   } catch (err: any) {
+    if (err?.status === 401) {
+      useState('auth-user').value = null
+      await navigateTo('/login')
+    }
     uploadError.value = err.message
   } finally {
     uploading.value = false
+    progress.value = 0
   }
 }
 
@@ -78,11 +93,13 @@ function submit() {
 
         <div class="upload">
           <label class="filebtn" :class="{ busy: uploading }">
-            {{ uploading ? 'Загрузка…' : 'Загрузить с устройства' }}
-            <input type="file" accept="image/*" :disabled="uploading" @change="onFile" />
+            {{ uploading ? (progress ? `Загрузка… ${progress}%` : 'Загрузка…') : 'Загрузить с устройства' }}
+            <input type="file" accept="image/*,video/mp4,.mp4" :disabled="uploading" @change="onFile" />
           </label>
           <button v-if="form.media_url" type="button" class="danger" @click="form.media_url = ''">{{ isVideo ? 'Убрать видео' : 'Убрать картинку' }}</button>
         </div>
+        <progress v-if="uploading && progress" class="upload-progress" :value="progress" max="100" />
+        <p class="muted" style="margin: 8px 0 0; font-size: 13px">Картинка (JPEG, PNG, WebP) или видео MP4 до 50 МБ</p>
         <p v-if="uploadError" class="error mt-2">{{ uploadError }}</p>
         <video v-if="showPreview && isVideo" :key="form.media_url" :src="form.media_url" class="preview" controls playsinline preload="metadata" />
         <img v-else-if="showPreview" :key="form.media_url" :src="form.media_url" class="preview" alt="Предпросмотр картинки" />
