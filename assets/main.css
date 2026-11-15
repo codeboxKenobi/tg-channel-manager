@@ -18,6 +18,10 @@ html { -webkit-text-size-adjust: 100%; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.55 "Segoe UI", system-ui, -apple-system, sans-serif; }
 img { max-width: 100%; }
 
+/* ссылки: без подчёркивания, цвет акцента (как у логотипа); у ссылок в меню и оглавлении свои стили ниже */
+a { color: var(--accent); text-decoration: none; }
+a:hover { color: color-mix(in srgb, var(--accent) 75%, var(--text)); text-decoration: none; }
+
 /* ---------- шапка и меню ---------- */
 /* Бургер всегда слева перед логотипом, пользователь и «Выйти» справа. Края шапки и выпадающего меню лежат
    на тех же вертикалях, что левый и правый край карточек (--edge), на любой ширине экрана. */
@@ -86,6 +90,8 @@ button:disabled { opacity: .5; cursor: default; }
 .actions { display: flex; gap: var(--s-2); flex-wrap: wrap; margin-top: var(--s-3); }
 .auth-card { max-width: 380px; margin: var(--s-8) auto; }
 .auth-card h1 { margin-bottom: var(--s-3); }
+.auth-brand { display: flex; align-items: center; justify-content: center; gap: var(--s-3); margin-bottom: var(--s-5); font-size: 20px; font-weight: 600; }
+.auth-logo { display: block; height: 40px; width: auto; }
 
 /* вспомогательные отступы (идут после .error и т.п., чтобы переопределять их) */
 .mt-1 { margin-top: var(--s-1); }

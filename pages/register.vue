@@ -25,6 +25,7 @@ async function submit() {
 
 <template>
   <form v-if="registration.open" class="card auth-card" @submit.prevent="submit">
+    <AuthBrand />
     <h1>Регистрация</h1>
     <p class="muted">
       Вы получите собственное изолированное пространство: свои каналы, редакторов и источники парсера.
@@ -56,6 +57,7 @@ async function submit() {
   </form>
 
   <div v-else class="card auth-card">
+    <AuthBrand />
     <h1>Регистрация</h1>
     <p class="muted">Самостоятельная регистрация отключена. Попросите администратора создать для вас аккаунт.</p>
     <p class="muted"><NuxtLink to="/login">Войти</NuxtLink></p>
