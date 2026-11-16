@@ -2,10 +2,10 @@
 // Реквизиты для пожертвований.
 // ВНИМАНИЕ: адреса и номер ниже ВЫДУМАННЫЕ (для примера) — перед запуском замените их на свои.
 const wallets = [
-  { id: 'gram', name: 'Gram', value: 'UQPBnAFJOxK2AN18foIsGviEaM7ctRFZ-fgK0it5Nu_sIqAU' },
-  { id: 'btc', name: 'Bitcoin', value: 'bc1qdde45qvqh0mkszwmea8adtwqqdel2vg00e829d' },
-  { id: 'eth', name: 'Ethereum', value: '0xe6f0d35a9d7cc3e39cc7f7102c70507aa6b1c9cd' },
-  { id: 'sbp', name: 'СБП (Служба быстрых платежей)', value: '+7 900 555-01-23' },
+  { id: 'gram', name: 'Gram', value: 'UQBYjsCeWqBBbJbxFDjLzzWWEuNaAtAp1Ovvw0KmbJCd7itE' },
+  { id: 'btc', name: 'Bitcoin', value: 'bc1qrrvydsjvmrnjc390qy6qjud9gtrt454tpc4yyc' },
+  { id: 'eth', name: 'Ethereum', value: '0x5a9a6A3C145CAAE503cEA0fab036175e1f5Ed384' },
+  { id: 'sbp', name: 'СБП (Служба быстрых платежей)', value: '+7 978 513-63-16' },
 ]
 
 const copiedId = ref('')
