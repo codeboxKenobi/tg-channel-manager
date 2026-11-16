@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import { q } from './db.js';
 import { activeBots, getBot, publishPost, memberCount } from './bot.js';
+import { purgeInactive } from './account.js';
 
 /** Публикует один пост (статус должен быть 'publishing'), возвращает обновлённую строку. */
 export async function publishById(id) {
@@ -61,5 +62,7 @@ export async function startJobs() {
   cron.schedule('* * * * *', () => publishDue().catch((e) => console.error('publishDue', e)));
   cron.schedule('0 * * * *', () => snapshotStats().catch((e) => console.error('snapshotStats', e)));
   cron.schedule('15 3 * * *', () => q('delete from sessions where expires_at < now()').catch(() => {}));
+  // раз в сутки: удалить аккаунты, неактивные дольше INACTIVE_DAYS дней (по умолчанию 90; 0 — отключено)
+  cron.schedule('30 3 * * *', () => purgeInactive().catch((e) => console.error('purgeInactive', e)));
   snapshotStats().catch(() => {});
 }

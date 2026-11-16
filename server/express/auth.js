@@ -55,6 +55,7 @@ export async function createSession(req, res, userId) {
     `insert into sessions (token_hash, user_id, expires_at) values ($1, $2, now() + make_interval(days => $3::int))`,
     [sha(token), userId, TTL_DAYS],
   );
+  await q('update users set last_active_at = now() where id = $1', [userId]); // вход — это активность
   res.cookie(COOKIE, token, {
     httpOnly: true,
     sameSite: 'lax',
@@ -83,10 +84,21 @@ export async function currentUser(req) {
 }
 
 // ---- middleware ----
+// Активность пользователя (для автоудаления неактивных аккаунтов): не чаще раза в 15 минут на пользователя
+const touched = (globalThis.__tgmTouched ??= new Map());
+function touchActivity(userId) {
+  const now = Date.now();
+  if (now - (touched.get(userId) ?? 0) < 15 * 60 * 1000) return;
+  if (touched.size > 5000) touched.clear();
+  touched.set(userId, now);
+  q('update users set last_active_at = now() where id = $1', [userId]).catch(() => touched.delete(userId));
+}
+
 export async function requireAuth(req, _res, next) {
   const user = await currentUser(req);
   if (!user) throw httpError('Требуется вход', 401);
   req.user = user;
+  touchActivity(user.id);
   next();
 }
 

@@ -7,6 +7,7 @@ import {
   hashPassword, readToken, requireAuth, sha, verifyPassword,
 } from '../auth.js';
 import { issueChallenge, openPasswords } from '../sealed.js';
+import { deleteAccount, inactiveDays } from '../account.js';
 
 const r = Router();
 const publicUser = (u) => ({ id: u.id, email: u.email, name: u.name, role: u.role, is_super: Boolean(u.is_super) });
@@ -123,6 +124,41 @@ r.post('/password', requireAuth, async (req, res) => {
   await q('update users set password_hash = $2 where id = $1', [req.user.id, await hashPassword(next)]);
   // остальные устройства разлогиниваются
   await q('delete from sessions where user_id = $1 and token_hash <> $2', [req.user.id, sha(readToken(req))]);
+  res.status(204).end();
+});
+
+// Сведения для страницы «Профиль»: можно ли удалить аккаунт, что при этом пропадёт и через сколько дней неактивный аккаунт удаляется сам
+r.get('/account', requireAuth, async (req, res) => {
+  const u = req.user;
+  const out = { role: u.role, is_super: Boolean(u.is_super), can_delete: !u.is_super, inactive_days: inactiveDays() };
+  if (u.role === 'admin') {
+    const { rows: [c] } = await q(
+      `select (select count(*)::int from channels where owner_id = $1) as channels,
+              (select count(*)::int from users where owner_id = $1) as editors`,
+      [u.id],
+    );
+    Object.assign(out, c);
+  }
+  res.json(out);
+});
+
+// Удаление своего аккаунта по желанию: нужен пароль. Администратор удаляется вместе со всем своим пространством.
+// Главный администратор удалить себя не может (иначе система осталась бы без него).
+r.post('/delete-account', requireAuth, async (req, res) => {
+  if (req.user.is_super) throw httpError('Главный администратор не может удалить аккаунт', 403);
+  const key = `${req.socket.remoteAddress}|${req.user.email}`; // общий с входом счётчик неудачных попыток
+  if (isBlocked(key)) throw httpError('Слишком много попыток. Повторите через 15 минут', 429);
+
+  const password = String(openPasswords(req.body, ['password']).password ?? '');
+  const { rows: [row] } = await q('select password_hash from users where id = $1', [req.user.id]);
+  if (!row || password.length > 200 || !(await verifyPassword(password, row.password_hash))) {
+    recordFailure(key);
+    throw httpError('Пароль неверен', 400);
+  }
+  failures.delete(key);
+
+  await deleteAccount(req.user.id);
+  await destroySession(req, res); // снимает cookie сессии
   res.status(204).end();
 });
 

@@ -21,6 +21,7 @@ services:
       DATABASE_URL: postgres://tgm:${DB_PASSWORD}@db:5432/tgm
       BOT_TOKEN: ${BOT_TOKEN}
       TRUST_PROXY: "true"
+      INACTIVE_DAYS: ${INACTIVE_DAYS:-90}
     ports: ["127.0.0.1:3000:3000"]
     volumes: [uploads:/data/uploads]
 volumes:

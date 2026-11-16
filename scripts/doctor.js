@@ -69,6 +69,14 @@ function secretsKeyProblem(raw) {
     warn('PUBLIC_URL не задан: боты работают через polling (подходит для разработки). Для продакшена задайте PUBLIC_URL=https://ваш-домен: боты перейдут на webhook');
   }
 
+  {
+    const raw = (env.INACTIVE_DAYS || '').trim();
+    if (!raw) ok('Автоудаление неактивных аккаунтов: через 90 дней без входа (INACTIVE_DAYS не задан)');
+    else if (!/^\d+$/.test(raw)) warn(`INACTIVE_DAYS="${env.INACTIVE_DAYS}" — не число: будет использовано значение по умолчанию (90 дней)`);
+    else if (Number(raw) === 0) ok('Автоудаление неактивных аккаунтов отключено (INACTIVE_DAYS=0)');
+    else ok(`Автоудаление неактивных аккаунтов: через ${Math.max(7, Number(raw))} дн. без входа`);
+  }
+
   if (env.ALLOW_PLAINTEXT_PASSWORD === 'true') warn('ALLOW_PLAINTEXT_PASSWORD=true: сервер принимает пароли в открытом виде. Отключите, если не нужен curl/скрипты');
   if (env.PORT && !/^\d+$/.test(env.PORT)) fail(`PORT="${env.PORT}" не число`);
   else ok(`Порт: ${env.PORT || '3000 (по умолчанию)'}`);
