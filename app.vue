@@ -43,6 +43,7 @@ async function out() {
           <NuxtLink v-if="isAdmin" to="/users">Пользователи</NuxtLink>
           <hr class="menu-sep" />
           <NuxtLink to="/guide">Руководство пользователя</NuxtLink>
+          <NuxtLink to="/support">Поддержать проект</NuxtLink>
         </nav>
       </Transition>
     </header>
