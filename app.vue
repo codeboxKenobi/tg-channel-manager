@@ -48,5 +48,6 @@ async function out() {
     </header>
     <div v-if="showNav && menuOpen" class="backdrop" @click="menuOpen = false" />
     <main><NuxtPage /></main>
+    <AppDialog />
   </div>
 </template>

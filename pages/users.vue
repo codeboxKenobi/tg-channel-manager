@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const api = useApi()
+const dialog = useDialog()
 const { user: me, isSuper } = useAuth()
 const users = ref<any[]>([]) // редакторы моего пространства
 const admins = ref<any[]>([]) // все администраторы (только для главного администратора)
@@ -38,19 +39,37 @@ const create = (role: 'editor' | 'admin', form: { email: string; name: string; p
     await api('/users', { method: 'POST', body: { email: form.email, name: form.name, role, ...(await sealFields({ password: form.password })) } })
     Object.assign(form, { email: '', name: '', password: '' })
   })
-const resetPassword = (u: any) => {
-  const password = prompt(`Новый пароль для ${u.email} (не короче 8 символов)`)
-  return password ? run(async () => api(`/users/${u.id}`, { method: 'PUT', body: { name: u.name, ...(await sealFields({ password })) } })) : undefined
+const resetPassword = async (u: any) => {
+  const password = await dialog.prompt({
+    title: 'Сброс пароля',
+    message: `Новый пароль для ${u.email}.`,
+    input: { label: 'Новый пароль (не короче 8 символов)', type: 'password', minlength: 8, autocomplete: 'new-password' },
+    confirmText: 'Сменить пароль',
+  })
+  if (password) await run(async () => api(`/users/${u.id}`, { method: 'PUT', body: { name: u.name, ...(await sealFields({ password })) } }))
 }
-const removeEditor = (u: any) =>
-  confirm(`Удалить редактора ${u.email}?`) ? run(() => api(`/users/${u.id}`, { method: 'DELETE' })) : undefined
+const removeEditor = async (u: any) => {
+  const sure = await dialog.confirm({
+    title: 'Удалить редактора?',
+    message: `Редактор ${u.email} будет удалён.`,
+    confirmText: 'Удалить',
+    danger: true,
+  })
+  if (sure) await run(() => api(`/users/${u.id}`, { method: 'DELETE' }))
+}
 // администратор уносит с собой всё своё пространство, поэтому предупреждаем о его содержимом
-const removeAdmin = (u: any) =>
-  confirm(
-    `Удалить администратора ${u.email}?\n\nВместе с ним будут безвозвратно удалены его каналы (${u.channels_count}) с постами и его редакторы (${u.editors_count}).`,
-  )
-    ? run(() => api(`/users/${u.id}?force=1`, { method: 'DELETE' }))
-    : undefined
+const removeAdmin = async (u: any) => {
+  const sure = await dialog.confirm({
+    title: 'Удалить администратора?',
+    message: [
+      `Администратор ${u.email} будет удалён.`,
+      `Вместе с ним будут безвозвратно удалены его каналы (${u.channels_count}) с постами и его редакторы (${u.editors_count}).`,
+    ],
+    confirmText: 'Удалить',
+    danger: true,
+  })
+  if (sure) await run(() => api(`/users/${u.id}?force=1`, { method: 'DELETE' }))
+}
 
 const channelOptions = computed(() =>
   channels.value.map((c) => ({ id: c.id, label: c.title, hint: c.username ? '@' + c.username : undefined })),

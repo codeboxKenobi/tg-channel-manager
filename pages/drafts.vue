@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const api = useApi()
+const dialog = useDialog()
 const { isAdmin } = useAuth()
 const channels = ref<any[]>([])
 const posts = ref<any[]>([])
@@ -47,13 +48,25 @@ const save = (payload: any) =>
     editing.value = null
     creating.value = false
   })
-const publishNow = (p: any) =>
-  confirm(`Опубликовать «${p.title}» в канале «${p.channel_title}» прямо сейчас?`) &&
-  run(() => api(`/posts/${p.id}/publish`, { method: 'POST' }))
+const publishNow = async (p: any) => {
+  const sure = await dialog.confirm({
+    title: 'Опубликовать пост?',
+    message: `Пост «${p.title}» будет сразу опубликован в канале «${p.channel_title}».`,
+    confirmText: 'Опубликовать',
+  })
+  if (sure) await run(() => api(`/posts/${p.id}/publish`, { method: 'POST' }))
+}
 const unschedule = (p: any) =>
   run(() => api(`/posts/${p.id}`, { method: 'PUT', body: { ...p, scheduled_at: null } }))
-const remove = (p: any) =>
-  confirm(`Удалить пост «${p.title}»?`) && run(() => api(`/posts/${p.id}`, { method: 'DELETE' }))
+const remove = async (p: any) => {
+  const sure = await dialog.confirm({
+    title: 'Удалить пост?',
+    message: `Пост «${p.title}» будет удалён.`,
+    confirmText: 'Удалить',
+    danger: true,
+  })
+  if (sure) await run(() => api(`/posts/${p.id}`, { method: 'DELETE' }))
+}
 
 function startEdit(p: any) {
   creating.value = false
