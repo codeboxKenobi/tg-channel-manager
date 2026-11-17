@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const api = useApi()
+const dialog = useDialog()
 const PAGE = 30
 const CLAMP = 500 // длиннее — текст сворачивается
 
@@ -107,7 +108,13 @@ async function parse() {
 }
 
 async function removeSource(s: any) {
-  if (!confirm(`Удалить канал @${s.username} и ${s.posts_count} спарсенных постов? Уже созданные черновики останутся.`)) return
+  const sure = await dialog.confirm({
+    title: 'Удалить канал?',
+    message: `Канал @${s.username} и ${s.posts_count} спарсенных постов будут удалены. Уже созданные черновики останутся.`,
+    confirmText: 'Удалить',
+    danger: true,
+  })
+  if (!sure) return
   try {
     await api(`/parser/sources/${s.id}`, { method: 'DELETE' })
     if (filterSource.value === s.id) filterSource.value = ''

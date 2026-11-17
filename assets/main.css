@@ -44,6 +44,19 @@ a:hover { color: color-mix(in srgb, var(--accent) 75%, var(--text)); text-decora
 @media (prefers-reduced-motion: reduce) { .menu-enter-active, .menu-leave-active { transition: none; } }
 .backdrop { position: fixed; inset: var(--header-h) 0 0 0; background: rgba(0, 0, 0, .35); z-index: 4; }
 
+/* ---------- окна подтверждения и ввода (AppDialog.vue) ---------- */
+/* Окно — та же карточка и те же элементы формы (заголовок, подпись, поле, ряд кнопок), только по центру поверх затемнённого фона. */
+.modal { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: var(--s-4); background: rgba(0, 0, 0, .35); overflow-y: auto; }
+.modal-panel { width: min(440px, 100%); max-height: calc(100dvh - 2 * var(--s-4)); margin: 0; overflow-y: auto; box-shadow: 0 12px 24px rgba(0, 0, 0, .14); }
+.modal-body { overflow-wrap: anywhere; }
+.modal-panel label.opt { margin-top: var(--s-3); padding: 0; border-bottom: 0; }
+.modal-enter-active, .modal-leave-active { transition: opacity .15s ease; }
+.modal-enter-active .modal-panel, .modal-leave-active .modal-panel { transition: transform .15s ease; }
+.modal-enter-from, .modal-leave-to { opacity: 0; }
+.modal-enter-from .modal-panel, .modal-leave-to .modal-panel { transform: translateY(calc(-1 * var(--s-2))); }
+@media (prefers-reduced-motion: reduce) { .modal-enter-active, .modal-leave-active, .modal-enter-active .modal-panel, .modal-leave-active .modal-panel { transition: none; } }
+html.modal-open { overflow: hidden; }
+
 /* ---------- основа ---------- */
 main { max-width: var(--page); margin: var(--s-5) auto; padding: 0 var(--gutter) var(--s-7); }
 h1 { font-size: 22px; margin: 0; }

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const api = useApi()
+const dialog = useDialog()
 const channels = ref<any[]>([])
 const posts = ref<any[]>([])
 const channelId = ref<number | ''>('')
@@ -19,8 +20,17 @@ async function load() {
 }
 
 async function remove(p: any) {
-  if (!confirm(`Удалить запись «${p.title}»?`)) return
-  const fromTelegram = Boolean(p.tg_message_id) && confirm('Удалить и само сообщение из канала?')
+  // один диалог вместо двух подряд: вопрос про сообщение в Telegram — флажок
+  const hasMessage = Boolean(p.tg_message_id)
+  const { ok, checked } = await dialog.ask({
+    title: 'Удалить запись?',
+    message: `Запись «${p.title}» будет удалена.`,
+    option: hasMessage ? { label: 'Удалить и само сообщение из канала', checked: false } : undefined,
+    confirmText: 'Удалить',
+    danger: true,
+  })
+  if (!ok) return
+  const fromTelegram = hasMessage && checked
   try {
     await api(`/posts/${p.id}`, { method: 'DELETE', query: { tg: fromTelegram ? 1 : undefined } })
   } catch (e: any) {

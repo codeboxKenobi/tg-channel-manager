@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const api = useApi()
+const dialog = useDialog()
 const { isAdmin } = useAuth()
 const channels = ref<any[]>([])
 const editors = ref<any[]>([])
@@ -40,8 +41,15 @@ const add = () =>
 const toggle = (c: any) =>
   run(() => api(`/channels/${c.id}`, { method: 'PUT', body: { title: c.title, description: c.description, is_active: !c.is_active } }))
 const refresh = (c: any) => run(() => api(`/channels/${c.id}/refresh`, { method: 'POST' }))
-const remove = (c: any) =>
-  confirm(`Удалить канал «${c.title}» вместе со всеми его постами?`) ? run(() => api(`/channels/${c.id}`, { method: 'DELETE' })) : undefined
+const remove = async (c: any) => {
+  const sure = await dialog.confirm({
+    title: 'Удалить канал?',
+    message: `Канал «${c.title}» будет удалён вместе со всеми его постами.`,
+    confirmText: 'Удалить',
+    danger: true,
+  })
+  if (sure) await run(() => api(`/channels/${c.id}`, { method: 'DELETE' }))
+}
 
 const editorOptions = computed(() => editors.value.map((u) => ({ id: u.id, label: u.name, hint: u.email })))
 const assignedIds = (c: any): number[] => (c.assigned_users ?? []).map((u: any) => u.id)

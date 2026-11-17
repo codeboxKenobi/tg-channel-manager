@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const api = useApi()
+const dialog = useDialog()
 const { user } = useAuth()
 const current = ref('')
 const next = ref('')
@@ -35,7 +36,13 @@ async function deleteMyAccount() {
     info.value?.role === 'admin'
       ? `Будут безвозвратно удалены ваш аккаунт, все ваши каналы с постами и статистикой, источники парсера, подключённый бот и редакторы (${info.value.editors ?? 0}). Сообщения, уже опубликованные в Telegram, останутся.`
       : 'Ваш аккаунт будет безвозвратно удалён. Посты, которые вы создали, останутся у администратора.'
-  if (!confirm(`Удалить аккаунт?\n\n${what}\n\nОтменить это будет нельзя.`)) return
+  const sure = await dialog.confirm({
+    title: 'Удалить аккаунт?',
+    message: [what, 'Отменить это будет нельзя.'],
+    confirmText: 'Удалить аккаунт',
+    danger: true,
+  })
+  if (!sure) return
   delBusy.value = true
   try {
     await api('/auth/delete-account', { method: 'POST', body: await sealFields({ password: delPassword.value }) })

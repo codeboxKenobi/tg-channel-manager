@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const api = useApi()
+const dialog = useDialog()
 const info = ref<any | null>(null)
 const token = ref('')
 const error = ref('')
@@ -29,12 +30,16 @@ const save = () =>
     token.value = '' // токен после сохранения нигде не остаётся
     return r
   }, 'Бот подключён.')
-const remove = () =>
-  confirm(
-    'Отключить бота?\n\nПубликация и статистика ваших каналов остановятся, запланированные посты будут помечены как неудавшиеся, а кнопки «лайк» под уже опубликованными постами перестанут работать.',
-  )
-    ? run(() => api('/bot', { method: 'DELETE' }), 'Бот отключён.')
-    : undefined
+const remove = async () => {
+  const sure = await dialog.confirm({
+    title: 'Отключить бота?',
+    message:
+      'Публикация и статистика ваших каналов остановятся, запланированные посты будут помечены как неудавшиеся, а кнопки «лайк» под уже опубликованными постами перестанут работать.',
+    confirmText: 'Отключить',
+    danger: true,
+  })
+  if (sure) await run(() => api('/bot', { method: 'DELETE' }), 'Бот отключён.')
+}
 
 onMounted(() => load().catch((e: any) => (error.value = e.message)))
 </script>
