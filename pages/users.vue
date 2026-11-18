@@ -9,6 +9,7 @@ const channels = ref<any[]>([])
 const editorForm = reactive({ email: '', name: '', password: '' })
 const adminForm = reactive({ email: '', name: '', password: '' })
 const error = ref('')
+const notice = ref<{ ok: boolean; text: string } | null>(null) // итог отправки письма новому пользователю
 const busy = ref(false)
 const accessFor = ref<any | null>(null)
 const loading = ref(true)
@@ -24,6 +25,7 @@ async function load() {
 }
 async function run(fn: () => Promise<any>) {
   error.value = ''
+  notice.value = null
   busy.value = true
   try {
     await fn()
@@ -37,7 +39,10 @@ async function run(fn: () => Promise<any>) {
 
 const create = (role: 'editor' | 'admin', form: { email: string; name: string; password: string }) =>
   run(async () => {
-    await api('/users', { method: 'POST', body: { email: form.email, name: form.name, role, ...(await sealFields({ password: form.password })) } })
+    const res = await api<any>('/users', { method: 'POST', body: { email: form.email, name: form.name, role, ...(await sealFields({ password: form.password })) } })
+    notice.value = res?.mail?.sent
+      ? { ok: true, text: `Пользователь создан. Письмо с логином и паролем отправлено на ${res.email}.` }
+      : { ok: false, text: `Пользователь создан, но письмо не отправлено: ${res?.mail?.reason ?? 'причина неизвестна'}. Передайте логин и пароль другим способом.` }
     Object.assign(form, { email: '', name: '', password: '' })
   })
 const resetPassword = async (u: any) => {
@@ -100,6 +105,7 @@ onMounted(() => run(async () => {}))
     </form>
 
     <p v-if="error" class="error">{{ error }}</p>
+    <p v-if="notice" class="callout mb-3" :class="{ 'callout-warn': !notice.ok }">{{ notice.text }}</p>
 
     <div v-if="accessFor" class="card">
       <AccessPicker

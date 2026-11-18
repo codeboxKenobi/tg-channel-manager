@@ -141,6 +141,16 @@ create unique index if not exists channels_owner_chat_idx on channels (owner_id,
 alter table users add column if not exists last_active_at timestamptz not null default now();
 create index if not exists users_last_active_idx on users (last_active_at);
 
+-- коды восстановления пароля (письмо с кодом): хранится только хеш, код живёт 15 минут, на него 5 попыток
+create table if not exists password_resets (
+  user_id    int primary key references users(id) on delete cascade,
+  salt       text not null,
+  code_hash  text not null,
+  tries      int not null default 0,
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now()
+);
+
 -- язык интерфейса пользователя (ru | en); применяется после входа на любом устройстве
 alter table users add column if not exists lang text not null default 'ru';
 `;

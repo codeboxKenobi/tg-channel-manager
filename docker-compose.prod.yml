@@ -22,6 +22,13 @@ services:
       BOT_TOKEN: ${BOT_TOKEN}
       TRUST_PROXY: "true"
       INACTIVE_DAYS: ${INACTIVE_DAYS:-90}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      APP_URL: ${APP_URL:-}
     ports: ["127.0.0.1:3000:3000"]
     volumes: [uploads:/data/uploads]
 volumes:

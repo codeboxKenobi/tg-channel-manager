@@ -4,6 +4,8 @@ import { httpError } from '../http.js';
 import { assertPassword, cleanUserInput, hashPassword, normalizeLang, requireRole, requireSuper } from '../auth.js';
 import { canManageUser, setUserChannels } from '../access.js';
 import { openPasswords } from '../sealed.js';
+import { mailEnabled, sendMail, mailErrorText, appUrl } from '../mailer.js';
+import { welcomeMail } from '../mail-templates.js';
 
 const r = Router();
 r.use(requireRole('admin'));
@@ -16,6 +18,21 @@ async function managed(req) {
     : { rows: [] };
   if (!canManageUser(req.user, target)) throw httpError('Пользователь не найден', 404);
   return target;
+}
+
+// Письмо новому пользователю: логин, пароль и краткое описание из руководства. Сбой почты не отменяет создание аккаунта.
+async function welcome(req, u, password) {
+  if (!mailEnabled()) return { sent: false, reason: 'отправка почты не настроена на сервере' };
+  try {
+    await sendMail({
+      to: u.email,
+      ...welcomeMail({ name: u.name, role: u.role, email: u.email, password, creator: req.user.name, url: appUrl(req) }),
+    });
+    return { sent: true };
+  } catch (e) {
+    console.error('Письмо новому пользователю не отправлено:', e.message);
+    return { sent: false, reason: mailErrorText(e) };
+  }
 }
 
 // Редакторы своего пространства
@@ -55,7 +72,7 @@ r.post('/', async (req, res) => {
     // новый пользователь начинает с языком создавшего его администратора (сменить можно в профиле)
     [email, name, await hashPassword(password), role, role === 'editor' ? req.user.id : null, normalizeLang(req.user.lang) ?? 'ru'],
   );
-  res.status(201).json(u);
+  res.status(201).json({ ...u, mail: await welcome(req, u, password) });
 });
 
 r.put('/:id', async (req, res) => {

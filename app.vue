@@ -5,7 +5,7 @@ const { t, locale } = useLocale()
 useHead(computed(() => ({ title: t('app.name'), htmlAttrs: { lang: locale.value } })))
 const route = useRoute()
 const menuOpen = ref(false)
-const showNav = computed(() => Boolean(user.value) && !['/login', '/register'].includes(route.path))
+const showNav = computed(() => Boolean(user.value) && !['/login', '/register', '/forgot'].includes(route.path))
 
 watch(() => route.fullPath, () => (menuOpen.value = false))
 const onKey = (e: KeyboardEvent) => {

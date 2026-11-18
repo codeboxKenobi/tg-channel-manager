@@ -1,0 +1,22 @@
+{
+  "name": "tg-channel-manager",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev",
+    "build": "nuxt build",
+    "start": "node --env-file=.env .output/server/index.mjs",
+    "migrate": "node --env-file=.env scripts/migrate.js",
+    "seed": "node --env-file=.env scripts/seed.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "node-cron": "^3.0.3",
+    "nuxt": "^3.16.0",
+    "pg": "^8.13.0",
+    "telegraf": "^4.16.3",
+    "vue": "^3.5.0",
+    "vue-router": "^4.5.0"
+  }
+}

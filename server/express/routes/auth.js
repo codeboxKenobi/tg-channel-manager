@@ -8,6 +8,8 @@ import {
 } from '../auth.js';
 import { issueChallenge, openPasswords } from '../sealed.js';
 import { deleteAccount, inactiveDays } from '../account.js';
+import { mailEnabled, sendMail, appUrl } from '../mailer.js';
+import { resetCodeMail } from '../mail-templates.js';
 
 const r = Router();
 const publicUser = (u) => ({ id: u.id, email: u.email, name: u.name, role: u.role, is_super: Boolean(u.is_super), lang: normalizeLang(u.lang) ?? 'ru' });
@@ -26,7 +28,7 @@ const getDummy = async () => (dummyHash ??= await hashPassword('dummy-password')
 r.get('/me', async (req, res) => {
   const user = await currentUser(req);
   const { rows: [{ n }] } = await q('select count(*)::int as n from users');
-  res.json({ user: user ? publicUser(user) : null, needsSetup: n === 0, registration: registrationInfo() });
+  res.json({ user: user ? publicUser(user) : null, needsSetup: n === 0, registration: registrationInfo(), mail: mailEnabled() });
 });
 
 // Публичный ключ для шифрования пароля в браузере + одноразовый nonce (защита от повтора запроса)
@@ -109,6 +111,79 @@ r.post('/login', async (req, res) => {
   failures.delete(key);
   await createSession(req, res, u.id);
   res.json({ user: publicUser(u) });
+});
+
+// ---- восстановление пароля по коду из письма ----
+// Код: 6 цифр, живёт 15 минут, на него 5 попыток; в БД хранится только хеш. Ответ на запрос кода одинаков для любого email
+// и не ждёт отправки письма, поэтому по нему нельзя узнать, зарегистрирован ли адрес.
+const RESET_TTL_MIN = 15;
+const RESET_MAX_TRIES = 5;
+const resetAsks = new Map(); // ключ (IP или email) → метки времени запросов кода
+function askThrottled(key, limit) {
+  const now = Date.now();
+  if (resetAsks.size > 10000) for (const [k, v] of resetAsks) if (now - v[v.length - 1] > 3600_000) resetAsks.delete(k);
+  const at = (resetAsks.get(key) ?? []).filter((t) => now - t < 3600_000);
+  if (at.length >= limit) return true;
+  resetAsks.set(key, [...at, now]);
+  return false;
+}
+
+// Шаг 1: код на почту. Не больше 10 запросов в час с одного IP и 3 в час на один адрес.
+r.post('/forgot', async (req, res) => {
+  if (!mailEnabled()) throw httpError('Отправка почты не настроена. Обратитесь к администратору', 503);
+  const email = String(req.body?.email ?? '').trim().toLowerCase();
+  if (!email.includes('@') || email.length > 254) throw httpError('Некорректный email');
+  if (askThrottled(`ip|${req.ip ?? req.socket.remoteAddress}`, 10) || askThrottled(`mail|${email}`, 3)) {
+    throw httpError('Слишком много запросов кода. Повторите через час', 429);
+  }
+  await q('delete from password_resets where expires_at < now()');
+  const { rows: [u] } = await q('select id, email, name from users where email = $1', [email]);
+  if (u) {
+    const code = String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
+    const salt = crypto.randomBytes(8).toString('hex');
+    await q(
+      `insert into password_resets (user_id, salt, code_hash, tries, expires_at)
+       values ($1, $2, $3, 0, now() + make_interval(mins => $4::int))
+       on conflict (user_id) do update
+         set salt = excluded.salt, code_hash = excluded.code_hash, tries = 0, expires_at = excluded.expires_at, created_at = now()`,
+      [u.id, salt, sha(salt + code), RESET_TTL_MIN],
+    );
+    // письмо уходит в фоне: время ответа не зависит от того, найден ли адрес
+    sendMail({ to: u.email, ...resetCodeMail({ name: u.name, code, minutes: RESET_TTL_MIN, url: appUrl() }) })
+      .catch((e) => console.error('Письмо с кодом не отправлено:', e.message));
+  }
+  res.json({ ok: true, minutes: RESET_TTL_MIN });
+});
+
+// Шаг 2: код + новый пароль. Пароль и код приходят в зашифрованном виде, как и при входе.
+r.post('/reset', async (req, res) => {
+  const email = String(req.body?.email ?? '').trim().toLowerCase();
+  const { password, code } = openPasswords(req.body, ['password', 'code']);
+  const key = `reset|${req.socket.remoteAddress}|${email}`;
+  if (isBlocked(key)) throw httpError('Слишком много попыток. Повторите через 15 минут', 429);
+  assertPassword(password);
+
+  const digits = String(code ?? '').replace(/\s/g, '');
+  const bad = () => {
+    recordFailure(key);
+    return httpError('Неверный или просроченный код', 400);
+  };
+  const { rows: [u] } = await q('select id from users where email = $1', [email]);
+  if (!u || !/^\d{6}$/.test(digits)) throw bad();
+  const { rows: [row] } = await q(
+    'select salt, code_hash from password_resets where user_id = $1 and expires_at > now() and tries < $2',
+    [u.id, RESET_MAX_TRIES],
+  );
+  if (!row) throw bad();
+  if (!crypto.timingSafeEqual(Buffer.from(sha(row.salt + digits)), Buffer.from(row.code_hash))) {
+    await q('update password_resets set tries = tries + 1 where user_id = $1', [u.id]);
+    throw bad();
+  }
+  failures.delete(key);
+  await q('update users set password_hash = $2 where id = $1', [u.id, await hashPassword(password)]);
+  await q('delete from password_resets where user_id = $1', [u.id]);
+  await q('delete from sessions where user_id = $1', [u.id]); // со всех устройств нужно войти заново
+  res.status(204).end();
 });
 
 r.post('/logout', async (req, res) => {

@@ -15,6 +15,7 @@ export function useAuth() {
   const user = useState<AuthUser | null | undefined>('auth-user', () => undefined)
   const needsSetup = useState<boolean>('auth-needs-setup', () => false)
   const registration = useState<{ open: boolean; code_required: boolean }>('auth-registration', () => ({ open: false, code_required: false }))
+  const mailEnabled = useState<boolean>('auth-mail', () => false) // на сервере настроена почта
   const isAdmin = computed(() => user.value?.role === 'admin')
   const isSuper = computed(() => Boolean(user.value?.is_super))
   const { locale, isLocale, applyLocale, picked } = useLocale()
@@ -41,6 +42,7 @@ export function useAuth() {
 
   async function fetchMe() {
     const r = await api<{ user: AuthUser | null; needsSetup: boolean; registration?: { open: boolean; code_required: boolean } }>('/auth/me')
+    mailEnabled.value = Boolean((r as any)?.mail)
     user.value = r.user
     if (r.user?.lang && isLocale(r.user.lang)) applyLocale(r.user.lang)
     needsSetup.value = r.needsSetup
@@ -65,5 +67,13 @@ export function useAuth() {
     user.value = null
   }
 
-  return { user, needsSetup, registration, isAdmin, isSuper, fetchMe, login, setup, register, logout, changeLang }
+  // восстановление пароля: код уходит на почту, затем код + новый пароль (пароль и код шифруются, как при входе)
+  async function forgot(email: string) {
+    return await api<{ ok: boolean; minutes: number }>('/auth/forgot', { method: 'POST', body: { email } })
+  }
+  async function resetPassword(email: string, code: string, password: string) {
+    await api('/auth/reset', { method: 'POST', body: { email, ...(await sealFields({ password, code })) } })
+  }
+
+  return { user, needsSetup, registration, isAdmin, isSuper, fetchMe, login, setup, register, logout, changeLang, mailEnabled, forgot, resetPassword }
 }

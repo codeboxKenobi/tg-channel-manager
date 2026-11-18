@@ -1,5 +1,6 @@
 <script setup lang="ts">
-const { needsSetup, login, setup, registration } = useAuth()
+const { needsSetup, login, setup, registration, mailEnabled } = useAuth()
+const resetDone = useRoute().query.reset === '1'
 const { t } = useLocale()
 const email = ref('')
 const name = ref('')
@@ -29,6 +30,8 @@ async function submit() {
     <h1>{{ needsSetup ? t('login.titleSetup') : t('login.title') }}</h1>
     <p v-if="needsSetup" class="muted">{{ t('login.noUsers') }}</p>
 
+    <p v-if="resetDone && !needsSetup" class="callout mb-3">Пароль изменён. Войдите с новым паролем.</p>
+
     <label>{{ t('field.email') }}</label>
     <input v-model="email" type="email" required autocomplete="username" autofocus />
 
@@ -39,6 +42,8 @@ async function submit() {
 
     <label>{{ needsSetup ? t('field.passwordMin') : t('field.password') }}</label>
     <input v-model="password" type="password" required :minlength="needsSetup ? 8 : undefined" :autocomplete="needsSetup ? 'new-password' : 'current-password'" />
+
+    <p v-if="!needsSetup && mailEnabled" class="mt-2"><NuxtLink to="/forgot">Забыли пароль?</NuxtLink></p>
 
     <p v-if="error" class="error mt-3">{{ error }}</p>
     <div class="actions">
