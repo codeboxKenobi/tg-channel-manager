@@ -2,6 +2,7 @@
 const api = useApi()
 const dialog = useDialog()
 const { isAdmin } = useAuth()
+const { t } = useLocale()
 const channels = ref<any[]>([])
 const editors = ref<any[]>([])
 const chat = ref('')
@@ -43,9 +44,9 @@ const toggle = (c: any) =>
 const refresh = (c: any) => run(() => api(`/channels/${c.id}/refresh`, { method: 'POST' }))
 const remove = async (c: any) => {
   const sure = await dialog.confirm({
-    title: 'Удалить канал?',
-    message: `Канал «${c.title}» будет удалён вместе со всеми его постами.`,
-    confirmText: 'Удалить',
+    title: t('channels.deleteTitle'),
+    message: t('channels.deleteMsg', { title: c.title }),
+    confirmText: t('common.delete'),
     danger: true,
   })
   if (sure) await run(() => api(`/channels/${c.id}`, { method: 'DELETE' }))
@@ -64,23 +65,21 @@ onMounted(() => run(async () => {}))
 
 <template>
   <section :aria-busy="loading">
-    <div class="row head"><h1>Каналы</h1></div>
+    <div class="row head"><h1>{{ t('channels.title') }}</h1></div>
 
     <form v-if="isAdmin" class="card" @submit.prevent="add">
-      <h3>Подключить канал</h3>
-      <p class="muted mb-3">
-        Добавьте бота администратором канала с правом публикации, затем укажите @username или числовой id канала.
-      </p>
+      <h3>{{ t('channels.connectTitle') }}</h3>
+      <p class="muted mb-3">{{ t('channels.connectHint') }}</p>
       <div class="row">
-        <input v-model="chat" required placeholder="@my_channel или -1001234567890" style="flex: 2; min-width: 220px" />
-        <input v-model="title" placeholder="Название (если бот не подключён к API)" style="flex: 2; min-width: 220px" />
-        <button class="primary" :disabled="busy">Подключить</button>
+        <input v-model="chat" required :placeholder="t('channels.chatPlaceholder')" style="flex: 2; min-width: 220px" />
+        <input v-model="title" :placeholder="t('channels.titlePlaceholder')" style="flex: 2; min-width: 220px" />
+        <button class="primary" :disabled="busy">{{ t('channels.connect') }}</button>
       </div>
     </form>
 
     <p v-if="error" class="error">{{ error }}</p>
     <p v-if="!loading && !channels.length" class="muted">
-      {{ isAdmin ? 'Каналов пока нет. Подключите первый выше.' : 'Вам пока не назначены каналы. Обратитесь к администратору.' }}
+      {{ isAdmin ? t('channels.emptyAdmin') : t('channels.emptyEditor') }}
     </p>
 
     <SkeletonCards v-if="loading" :count="3" :actions="isAdmin ? 4 : 1" />
@@ -89,33 +88,33 @@ onMounted(() => run(async () => {}))
       <div class="row between">
         <div>
           <strong>{{ c.title }}</strong>
-          <span class="muted"> {{ c.username ? '@' + c.username : 'приватный канал' }}</span>
-          <span v-if="!c.is_active" class="badge ml-2">Отключён</span>
+          <span class="muted"> {{ c.username ? '@' + c.username : t('channels.private') }}</span>
+          <span v-if="!c.is_active" class="badge ml-2">{{ t('channels.disabled') }}</span>
         </div>
-        <div class="muted">{{ fmtNum(c.subscribers_count) }} подписчиков</div>
+        <div class="muted">{{ t('channels.subscribers', { n: fmtNum(c.subscribers_count) }, c.subscribers_count) }}</div>
       </div>
       <p v-if="c.description" class="muted mt-2">{{ c.description }}</p>
       <p class="mt-2">
-        Опубликовано: <b>{{ c.published_count }}</b> · В подготовке: <b>{{ c.pending_count }}</b>
+        {{ t('channels.published') }}: <b>{{ c.published_count }}</b> · {{ t('channels.pending') }}: <b>{{ c.pending_count }}</b>
       </p>
       <p v-if="isAdmin" class="muted mt-2">
-        Доступ:
-        <span v-if="!c.assigned_users.length">только администраторы</span>
+        {{ t('channels.access') }}:
+        <span v-if="!c.assigned_users.length">{{ t('channels.adminsOnly') }}</span>
         <span v-else class="chips-inline"><span v-for="u in c.assigned_users" :key="u.id" class="tagchip">{{ u.name }}</span></span>
       </p>
       <div class="actions">
-        <button :disabled="busy" @click="refresh(c)">Обновить данные</button>
-        <button v-if="isAdmin" :disabled="busy" @click="accessFor = accessFor === c.id ? null : c.id">Доступ</button>
-        <button v-if="isAdmin" :disabled="busy" @click="toggle(c)">{{ c.is_active ? 'Отключить публикации' : 'Включить публикации' }}</button>
-        <button v-if="isAdmin" class="danger" :disabled="busy" @click="remove(c)">Удалить</button>
+        <button :disabled="busy" @click="refresh(c)">{{ t('channels.refresh') }}</button>
+        <button v-if="isAdmin" :disabled="busy" @click="accessFor = accessFor === c.id ? null : c.id">{{ t('channels.access') }}</button>
+        <button v-if="isAdmin" :disabled="busy" @click="toggle(c)">{{ c.is_active ? t('channels.disablePosting') : t('channels.enablePosting') }}</button>
+        <button v-if="isAdmin" class="danger" :disabled="busy" @click="remove(c)">{{ t('common.delete') }}</button>
       </div>
       <AccessPicker
         v-if="isAdmin && accessFor === c.id"
         :key="c.id"
-        title="Кому доступен канал"
+        :title="t('channels.accessTitle')"
         :options="editorOptions"
         :selected="assignedIds(c)"
-        empty="Редакторов пока нет. Добавьте их на странице «Пользователи»."
+        :empty="t('channels.noEditors')"
         @save="(ids) => saveAccess(c, ids)"
         @cancel="accessFor = null"
       />

@@ -29,6 +29,10 @@ export function assertPassword(p) {
   if (p.length > 200) throw httpError('Пароль слишком длинный');
 }
 
+// Языки интерфейса (users.lang). Клиентская часть: composables/useLocale.ts и locales/
+export const LANGS = ['ru', 'en'];
+export const normalizeLang = (v) => (LANGS.includes(v) ? v : null);
+
 export function cleanUserInput(body = {}) {
   const email = String(body.email ?? '').trim().toLowerCase();
   const name = String(body.name ?? '').trim();
@@ -75,7 +79,7 @@ export async function currentUser(req) {
   const token = readToken(req);
   if (!token) return null;
   const { rows: [u] } = await q(
-    `select u.id, u.email, u.name, u.role, u.owner_id, u.is_super
+    `select u.id, u.email, u.name, u.role, u.owner_id, u.is_super, u.lang
      from sessions s join users u on u.id = s.user_id
      where s.token_hash = $1 and s.expires_at > now()`,
     [sha(token)],

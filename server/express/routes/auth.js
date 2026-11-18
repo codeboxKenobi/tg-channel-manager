@@ -4,13 +4,13 @@ import { q } from '../db.js';
 import { httpError } from '../http.js';
 import {
   assertPassword, cleanUserInput, createSession, currentUser, destroySession,
-  hashPassword, readToken, requireAuth, sha, verifyPassword,
+  hashPassword, normalizeLang, readToken, requireAuth, sha, verifyPassword,
 } from '../auth.js';
 import { issueChallenge, openPasswords } from '../sealed.js';
 import { deleteAccount, inactiveDays } from '../account.js';
 
 const r = Router();
-const publicUser = (u) => ({ id: u.id, email: u.email, name: u.name, role: u.role, is_super: Boolean(u.is_super) });
+const publicUser = (u) => ({ id: u.id, email: u.email, name: u.name, role: u.role, is_super: Boolean(u.is_super), lang: normalizeLang(u.lang) ?? 'ru' });
 
 // ограничение подбора пароля: 10 неудачных попыток за 15 минут на пару IP + email
 const failures = new Map();
@@ -40,10 +40,10 @@ r.post('/setup', async (req, res) => {
   const { password: plain } = openPasswords(req.body, ['password']);
   const { email, name, password } = cleanUserInput({ ...req.body, password: plain });
   const { rows: [u] } = await q(
-    `insert into users (email, name, password_hash, role, is_super)
-     select $1, $2, $3, 'admin', true where not exists (select 1 from users)
-     returning id, email, name, role, is_super`,
-    [email, name, await hashPassword(password)],
+    `insert into users (email, name, password_hash, role, is_super, lang)
+     select $1, $2, $3, 'admin', true, $4 where not exists (select 1 from users)
+     returning id, email, name, role, is_super, lang`,
+    [email, name, await hashPassword(password), normalizeLang(req.body?.lang) ?? 'ru'],
   );
   if (!u) throw httpError('Администратор уже создан', 409);
   await createSession(req, res, u.id);
@@ -86,9 +86,9 @@ r.post('/register', async (req, res) => {
 
   // не главный администратор (is_super = false), владельца нет: пространство создаётся вместе с аккаунтом
   const { rows: [u] } = await q(
-    `insert into users (email, name, password_hash, role, is_super) values ($1, $2, $3, 'admin', false)
-     returning id, email, name, role, is_super`,
-    [email, name, await hashPassword(password)],
+    `insert into users (email, name, password_hash, role, is_super, lang) values ($1, $2, $3, 'admin', false, $4)
+     returning id, email, name, role, is_super, lang`,
+    [email, name, await hashPassword(password), normalizeLang(req.body?.lang) ?? 'ru'],
   );
   await createSession(req, res, u.id);
   res.status(201).json({ user: publicUser(u) });
@@ -125,6 +125,14 @@ r.post('/password', requireAuth, async (req, res) => {
   // остальные устройства разлогиниваются
   await q('delete from sessions where user_id = $1 and token_hash <> $2', [req.user.id, sha(readToken(req))]);
   res.status(204).end();
+});
+
+// Язык интерфейса аккаунта (страница «Профиль»)
+r.put('/lang', requireAuth, async (req, res) => {
+  const lang = normalizeLang(req.body?.lang);
+  if (!lang) throw httpError('Неподдерживаемый язык');
+  await q('update users set lang = $2 where id = $1', [req.user.id, lang]);
+  res.json({ lang });
 });
 
 // Сведения для страницы «Профиль»: можно ли удалить аккаунт, что при этом пропадёт и через сколько дней неактивный аккаунт удаляется сам

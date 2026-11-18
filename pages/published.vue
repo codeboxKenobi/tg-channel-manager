@@ -1,6 +1,7 @@
 <script setup lang="ts">
 const api = useApi()
 const dialog = useDialog()
+const { t } = useLocale()
 const channels = ref<any[]>([])
 const posts = ref<any[]>([])
 const channelId = ref<number | ''>('')
@@ -23,10 +24,10 @@ async function remove(p: any) {
   // один диалог вместо двух подряд: вопрос про сообщение в Telegram — флажок
   const hasMessage = Boolean(p.tg_message_id)
   const { ok, checked } = await dialog.ask({
-    title: 'Удалить запись?',
-    message: `Запись «${p.title}» будет удалена.`,
-    option: hasMessage ? { label: 'Удалить и само сообщение из канала', checked: false } : undefined,
-    confirmText: 'Удалить',
+    title: t('published.deleteTitle'),
+    message: t('published.deleteMsg', { title: p.title }),
+    option: hasMessage ? { label: t('published.deleteFromTg'), checked: false } : undefined,
+    confirmText: t('common.delete'),
     danger: true,
   })
   if (!ok) return
@@ -52,15 +53,15 @@ watch(channelId, () => {
 <template>
   <section :aria-busy="loading">
     <div class="row between head">
-      <h1>Опубликованные</h1>
+      <h1>{{ t('published.title') }}</h1>
       <select v-model="channelId" class="filter">
-        <option value="">Все каналы</option>
+        <option value="">{{ t('common.allChannels') }}</option>
         <option v-for="c in channels" :key="c.id" :value="c.id">{{ c.title }}</option>
       </select>
     </div>
 
     <p v-if="error" class="error">{{ error }}</p>
-    <p v-if="!loading && !posts.length" class="muted">Опубликованных постов пока нет.</p>
+    <p v-if="!loading && !posts.length" class="muted">{{ t('published.empty') }}</p>
 
     <SkeletonCards v-if="loading" :count="3" :actions="2" />
 
@@ -75,10 +76,10 @@ watch(channelId, () => {
       <p class="post-content">{{ p.content }}</p>
       <video v-if="isVideoUrl(p.media_url)" :src="p.media_url" class="thumb" controls playsinline preload="metadata" />
       <img v-else-if="p.media_url" :src="p.media_url" class="thumb" alt="" loading="lazy" @error="($event.target as HTMLImageElement).style.display = 'none'" />
-      <p class="muted mt-2">Опубликовано: {{ fmtDate(p.published_at) }}<span v-if="p.author_name"> · автор: {{ p.author_name }}</span></p>
+      <p class="muted mt-2">{{ t('common.published') }}: {{ fmtDate(p.published_at) }}<span v-if="p.author_name"> · {{ t('published.byAuthor', { name: p.author_name }) }}</span></p>
       <div class="actions">
-        <a v-if="link(p)" :href="link(p)!" target="_blank" rel="noopener"><button>Открыть в Telegram</button></a>
-        <button class="danger" @click="remove(p)">Удалить</button>
+        <a v-if="link(p)" :href="link(p)!" target="_blank" rel="noopener"><button>{{ t('published.openInTg') }}</button></a>
+        <button class="danger" @click="remove(p)">{{ t('common.delete') }}</button>
       </div>
     </article>
   </section>

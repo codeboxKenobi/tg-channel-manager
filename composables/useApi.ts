@@ -9,7 +9,8 @@ export function useApi() {
         useState('auth-user').value = null
         await navigateTo('/login')
       }
-      throw new Error(e?.data?.error || e.message || 'Ошибка запроса')
+      const { t, tServer } = useLocale()
+      throw new Error(tServer(e?.data?.error) || e.message || t('common.requestError'))
     }
   }
 }

@@ -6,6 +6,7 @@ const props = defineProps<{
   fromMin?: boolean // масштаб от минимума — для величин вроде числа подписчиков
 }>()
 
+const { t } = useLocale()
 const min = computed(() => (props.fromMin ? Math.min(...props.items.map((i) => i.value)) : 0))
 const max = computed(() => Math.max(min.value + 1, ...props.items.map((i) => i.value)))
 const height = (v: number) => ((v - min.value) / (max.value - min.value)) * 100 + '%'
@@ -17,7 +18,7 @@ const height = (v: number) => ((v - min.value) / (max.value - min.value)) * 100 
       <h3>{{ title }}</h3>
       <b v-if="summary">{{ summary }}</b>
     </div>
-    <p v-if="!items.length" class="muted">Данных пока нет</p>
+    <p v-if="!items.length" class="muted">{{ t('chart.empty') }}</p>
     <template v-else>
       <div class="bars">
         <div v-for="i in items" :key="i.label" class="bar" :title="`${i.label}: ${i.value}`">

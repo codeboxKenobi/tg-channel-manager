@@ -1,6 +1,7 @@
 <script setup lang="ts">
 const api = useApi()
 const dialog = useDialog()
+const { t, tServer } = useLocale()
 const PAGE = 30
 const CLAMP = 500 // длиннее — текст сворачивается
 
@@ -78,7 +79,7 @@ async function add() {
     const s = await api('/parser/sources', { method: 'POST', body: { channel: channelInput.value } })
     channelInput.value = ''
     selected.value = [...selected.value, s.id]
-    say(`Канал @${s.username} добавлен. Загружено новых постов: ${s.added}.`)
+    say(t('parser.added', { username: s.username, added: s.added }))
     await Promise.all([loadSources(), loadPosts()])
   } catch (e: any) {
     fail(e)
@@ -97,8 +98,8 @@ async function parse() {
     const ok = results.filter((r) => !r.error)
     const bad = results.filter((r) => r.error)
     const added = ok.reduce((n, r) => n + r.added, 0)
-    say(ok.length ? `Готово: каналов — ${ok.length}, новых постов — ${added}.` : '')
-    if (bad.length) error.value = bad.map((r) => `@${r.username}: ${r.error}`).join('\n')
+    say(ok.length ? t('parser.done', { channels: ok.length, added }) : '')
+    if (bad.length) error.value = bad.map((r) => `@${r.username}: ${tServer(r.error)}`).join('\n')
   } catch (e: any) {
     fail(e)
   } finally {
@@ -109,16 +110,16 @@ async function parse() {
 
 async function removeSource(s: any) {
   const sure = await dialog.confirm({
-    title: 'Удалить канал?',
-    message: `Канал @${s.username} и ${s.posts_count} спарсенных постов будут удалены. Уже созданные черновики останутся.`,
-    confirmText: 'Удалить',
+    title: t('channels.deleteTitle'),
+    message: t('parser.deleteMsg', { username: s.username, n: s.posts_count }, s.posts_count),
+    confirmText: t('common.delete'),
     danger: true,
   })
   if (!sure) return
   try {
     await api(`/parser/sources/${s.id}`, { method: 'DELETE' })
     if (filterSource.value === s.id) filterSource.value = ''
-    say(`Канал @${s.username} удалён.`)
+    say(t('parser.removed', { username: s.username }))
   } catch (e: any) {
     fail(e)
   }
@@ -126,7 +127,7 @@ async function removeSource(s: any) {
 }
 
 async function makeDraft(p: any) {
-  if (!targetId.value) return fail(new Error('Выберите канал для публикации'))
+  if (!targetId.value) return fail(new Error(t('parser.pickChannel')))
   creating.value.push(p.id)
   try {
     const r = await api<{ post: any; note: string | null }>(`/parser/posts/${p.id}/draft`, {
@@ -135,7 +136,7 @@ async function makeDraft(p: any) {
     })
     p.draft_post_id = r.post.id
     p.draft_status = r.post.status
-    say(`Пост добавлен в «Подготовку постов».${r.note ? ' ' + r.note + '.' : ''}`, true)
+    say(`${t('parser.draftAdded')}${r.note ? ' ' + tServer(r.note) + '.' : ''}`, true)
   } catch (e: any) {
     fail(e)
     await loadPosts().catch(() => {}) // например, 409: пост уже сформирован в другой вкладке
@@ -170,27 +171,25 @@ onMounted(async () => {
 
 <template>
   <section :aria-busy="booting">
-    <div class="row head"><h1>Парсер</h1></div>
+    <div class="row head"><h1>{{ t('parser.title') }}</h1></div>
 
     <form class="card" @submit.prevent="add">
-      <h3>Добавить канал</h3>
-      <p class="muted mb-3">
-        Укажите @username или ссылку на публичный канал. Парсится его открытая веб-версия (t.me/s/…), поэтому приватные каналы и каналы с отключённым просмотром не подойдут.
-      </p>
+      <h3>{{ t('parser.addTitle') }}</h3>
+      <p class="muted mb-3">{{ t('parser.addHint') }}</p>
       <div class="row">
-        <input v-model="channelInput" required placeholder="@channel_name или https://t.me/channel_name" style="flex: 1; min-width: 240px" />
-        <button class="primary" :disabled="adding || parsing">{{ adding ? 'Проверяю…' : 'Добавить' }}</button>
+        <input v-model="channelInput" required :placeholder="t('parser.addPlaceholder')" style="flex: 1; min-width: 240px" />
+        <button class="primary" :disabled="adding || parsing">{{ adding ? t('common.checking') : t('common.add') }}</button>
       </div>
     </form>
 
     <p v-if="error" class="error pre-line">{{ error }}</p>
     <p v-if="info" class="pos">
       {{ info }}
-      <NuxtLink v-if="draftLink" to="/drafts">Открыть «Подготовка постов»</NuxtLink>
+      <NuxtLink v-if="draftLink" to="/drafts">{{ t('parser.openDrafts') }}</NuxtLink>
     </p>
 
     <div class="card">
-      <h3>Каналы для парсинга</h3>
+      <h3>{{ t('parser.sourcesTitle') }}</h3>
       <div v-if="booting" aria-hidden="true">
         <div v-for="n in 3" :key="n" class="src-row">
           <Skeleton width="18px" height="18px" radius="4px" />
@@ -198,57 +197,54 @@ onMounted(async () => {
           <Skeleton width="84px" height="41px" radius="8px" />
         </div>
       </div>
-      <p v-else-if="!sources.length" class="muted">Каналов пока нет. Добавьте первый выше.</p>
+      <p v-else-if="!sources.length" class="muted">{{ t('parser.noSources') }}</p>
       <template v-else>
-        <label class="opt all"><input type="checkbox" :checked="allSelected" @change="toggleAll" /><span>Выбрать все</span></label>
+        <label class="opt all"><input type="checkbox" :checked="allSelected" @change="toggleAll" /><span>{{ t('common.selectAll') }}</span></label>
         <div v-for="s in sources" :key="s.id" class="src-row">
           <label>
             <input v-model="selected" type="checkbox" :value="s.id" />
             <span class="src-info">
               <b>{{ s.title || s.username }}</b>
-              <span class="muted"> @{{ s.username }} · постов: {{ fmtNum(s.posts_count) }} · {{ s.last_parsed_at ? 'обновлён ' + fmtDate(s.last_parsed_at) : 'ещё не парсился' }}</span>
-              <span v-if="s.last_error" class="error">{{ s.last_error }}</span>
+              <span class="muted"> @{{ s.username }} · {{ t('parser.postsCount', { n: fmtNum(s.posts_count) }) }} · {{ s.last_parsed_at ? t('parser.updatedAt', { date: fmtDate(s.last_parsed_at) }) : t('parser.neverParsed') }}</span>
+              <span v-if="s.last_error" class="error">{{ tServer(s.last_error) }}</span>
             </span>
           </label>
-          <button type="button" class="danger" :disabled="parsing" @click="removeSource(s)">Удалить</button>
+          <button type="button" class="danger" :disabled="parsing" @click="removeSource(s)">{{ t('common.delete') }}</button>
         </div>
         <div class="parse-bar">
-          <select v-model.number="limit" aria-label="Сколько постов загружать">
-            <option :value="20">20 последних постов</option>
-            <option :value="50">50 последних постов</option>
-            <option :value="100">100 последних постов</option>
-            <option :value="200">200 последних постов</option>
+          <select v-model.number="limit" :aria-label="t('parser.limitAria')">
+            <option v-for="n in [20, 50, 100, 200]" :key="n" :value="n">{{ t('parser.limitOption', { n }) }}</option>
           </select>
           <button class="primary" :disabled="!selected.length || parsing || adding" @click="parse">
-            {{ parsing ? 'Парсинг…' : `Спарсить выбранные (${selected.length})` }}
+            {{ parsing ? t('parser.parsing') : t('parser.parseBtn', { n: selected.length }) }}
           </button>
         </div>
-        <p class="muted small mt-2">Чем больше постов, тем дольше загрузка. Уже сохранённые посты не дублируются. Берутся текст, фото и видео. Из текста удаляются ссылки, @упоминания, хештеги и рекламные подписи; посты без текста пропускаются.</p>
+        <p class="muted small mt-2">{{ t('parser.parseNote') }}</p>
       </template>
     </div>
 
     <div class="row between head mt-5">
-      <h1 style="font-size: 18px">Спарсенные посты<span v-if="total" class="muted"> · {{ fmtNum(total) }}</span></h1>
+      <h1 style="font-size: 18px">{{ t('parser.postsTitle') }}<span v-if="total" class="muted"> · {{ fmtNum(total) }}</span></h1>
       <div class="row">
-        <select v-model="filterSource" class="filter" aria-label="Фильтр по каналу-источнику">
-          <option value="">Все источники</option>
+        <select v-model="filterSource" class="filter" :aria-label="t('parser.filterAria')">
+          <option value="">{{ t('parser.allSources') }}</option>
           <option v-for="s in sources" :key="s.id" :value="s.id">@{{ s.username }}</option>
         </select>
-        <input v-model="search" type="search" placeholder="Поиск по тексту" class="filter" />
+        <input v-model="search" type="search" :placeholder="t('parser.searchPlaceholder')" class="filter" />
       </div>
     </div>
 
     <div class="card">
-      <label>Канал публикации для кнопки «Сформировать пост»</label>
+      <label>{{ t('parser.targetLabel') }}</label>
       <select v-model="targetId" :disabled="booting || !channels.length">
-        <option v-if="!booting && !channels.length" value="">Нет доступных каналов</option>
+        <option v-if="!booting && !channels.length" value="">{{ t('parser.noTargets') }}</option>
         <option v-for="c in channels" :key="c.id" :value="c.id">{{ c.title }}</option>
       </select>
-      <p v-if="!booting && !channels.length" class="muted mt-2">Каналов для публикации нет: подключите канал на странице «Каналы» или попросите администратора выдать доступ.</p>
+      <p v-if="!booting && !channels.length" class="muted mt-2">{{ t('parser.noTargetsHint') }}</p>
     </div>
 
     <p v-if="sources.length && !posts.length && !loadingPosts" class="muted">
-      {{ search || filterSource ? 'По фильтру ничего не найдено.' : 'Спарсенных постов пока нет. Выберите каналы и нажмите «Спарсить выбранные».' }}
+      {{ search || filterSource ? t('parser.noMatches') : t('parser.noPosts') }}
     </p>
 
     <SkeletonCards v-if="booting || (loadingPosts && !posts.length)" :count="3" :actions="2" />
@@ -259,26 +255,26 @@ onMounted(async () => {
           <strong>{{ p.source_title || p.source_username }}</strong>
           <span class="muted"> @{{ p.source_username }}</span>
         </div>
-        <span class="muted">{{ p.media_type === 'video' ? '🎬 видео · ' : '' }}{{ fmtDate(p.posted_at) }}</span>
+        <span class="muted">{{ p.media_type === 'video' ? t('parser.videoLabel') + ' · ' : '' }}{{ fmtDate(p.posted_at) }}</span>
       </div>
       <p class="post-content">{{ shown(p) }}</p>
       <button v-if="p.content.length > CLAMP" type="button" class="link" @click="toggleText(p.id)">
-        {{ expanded.includes(p.id) ? 'Свернуть' : 'Показать полностью' }}
+        {{ expanded.includes(p.id) ? t('parser.collapse') : t('parser.expand') }}
       </button>
       <video v-if="p.media_url && p.media_type === 'video'" :src="p.media_url" class="thumb" controls playsinline preload="metadata" />
       <img v-else-if="p.media_url" :src="p.media_url" class="thumb" alt="" loading="lazy" referrerpolicy="no-referrer" />
       <div class="actions">
         <button v-if="!p.draft_post_id" class="primary" :disabled="!targetId || creating.includes(p.id)" @click="makeDraft(p)">
-          {{ creating.includes(p.id) ? 'Формирую…' : 'Сформировать пост' }}
+          {{ creating.includes(p.id) ? t('parser.making') : t('parser.makeDraft') }}
         </button>
-        <NuxtLink v-else-if="p.draft_status !== 'published'" to="/drafts"><button>Уже в «Подготовке постов»</button></NuxtLink>
-        <span v-else class="badge published" style="align-self: center">Уже опубликован</span>
-        <a :href="`https://t.me/${p.source_username}/${p.tg_post_id}`" target="_blank" rel="noopener"><button>Открыть оригинал</button></a>
+        <NuxtLink v-else-if="p.draft_status !== 'published'" to="/drafts"><button>{{ t('parser.inDrafts') }}</button></NuxtLink>
+        <span v-else class="badge published" style="align-self: center">{{ t('parser.alreadyPublished') }}</span>
+        <a :href="`https://t.me/${p.source_username}/${p.tg_post_id}`" target="_blank" rel="noopener"><button>{{ t('parser.openOriginal') }}</button></a>
       </div>
     </article>
 
     <div v-if="hasMore" class="row" style="justify-content: center">
-      <button :disabled="loadingPosts" @click="loadPosts(true)">{{ loadingPosts ? 'Загрузка…' : 'Показать ещё' }}</button>
+      <button :disabled="loadingPosts" @click="loadPosts(true)">{{ loadingPosts ? t('common.loading') : t('parser.loadMore') }}</button>
     </div>
   </section>
 </template>

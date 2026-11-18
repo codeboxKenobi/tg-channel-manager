@@ -2,6 +2,7 @@
 const api = useApi()
 const dialog = useDialog()
 const { user: me, isSuper } = useAuth()
+const { t } = useLocale()
 const users = ref<any[]>([]) // редакторы моего пространства
 const admins = ref<any[]>([]) // все администраторы (только для главного администратора)
 const channels = ref<any[]>([])
@@ -41,18 +42,18 @@ const create = (role: 'editor' | 'admin', form: { email: string; name: string; p
   })
 const resetPassword = async (u: any) => {
   const password = await dialog.prompt({
-    title: 'Сброс пароля',
-    message: `Новый пароль для ${u.email}.`,
-    input: { label: 'Новый пароль (не короче 8 символов)', type: 'password', minlength: 8, autocomplete: 'new-password' },
-    confirmText: 'Сменить пароль',
+    title: t('users.resetTitle'),
+    message: t('users.resetMsg', { email: u.email }),
+    input: { label: t('field.newPassword'), type: 'password', minlength: 8, autocomplete: 'new-password' },
+    confirmText: t('users.resetConfirm'),
   })
   if (password) await run(async () => api(`/users/${u.id}`, { method: 'PUT', body: { name: u.name, ...(await sealFields({ password })) } }))
 }
 const removeEditor = async (u: any) => {
   const sure = await dialog.confirm({
-    title: 'Удалить редактора?',
-    message: `Редактор ${u.email} будет удалён.`,
-    confirmText: 'Удалить',
+    title: t('users.removeEditorTitle'),
+    message: t('users.removeEditorMsg', { email: u.email }),
+    confirmText: t('common.delete'),
     danger: true,
   })
   if (sure) await run(() => api(`/users/${u.id}`, { method: 'DELETE' }))
@@ -60,12 +61,12 @@ const removeEditor = async (u: any) => {
 // администратор уносит с собой всё своё пространство, поэтому предупреждаем о его содержимом
 const removeAdmin = async (u: any) => {
   const sure = await dialog.confirm({
-    title: 'Удалить администратора?',
+    title: t('users.removeAdminTitle'),
     message: [
-      `Администратор ${u.email} будет удалён.`,
-      `Вместе с ним будут безвозвратно удалены его каналы (${u.channels_count}) с постами и его редакторы (${u.editors_count}).`,
+      t('users.removeAdminMsg1', { email: u.email }),
+      t('users.removeAdminMsg2', { channels: u.channels_count, editors: u.editors_count }),
     ],
-    confirmText: 'Удалить',
+    confirmText: t('common.delete'),
     danger: true,
   })
   if (sure) await run(() => api(`/users/${u.id}?force=1`, { method: 'DELETE' }))
@@ -86,15 +87,15 @@ onMounted(() => run(async () => {}))
 
 <template>
   <section :aria-busy="loading">
-    <div class="row head"><h1>Пользователи</h1></div>
+    <div class="row head"><h1>{{ t('users.title') }}</h1></div>
 
     <form class="card" @submit.prevent="create('editor', editorForm)">
-      <h3>Новый редактор</h3>
+      <h3>{{ t('users.newEditor') }}</h3>
       <div class="row" style="align-items: flex-end">
-        <div style="flex: 2; min-width: 200px"><label>Email</label><input v-model="editorForm.email" type="email" required /></div>
-        <div style="flex: 1; min-width: 150px"><label>Имя</label><input v-model="editorForm.name" required /></div>
-        <div style="flex: 1; min-width: 150px"><label>Пароль</label><input v-model="editorForm.password" type="password" required minlength="8" autocomplete="new-password" /></div>
-        <button class="primary" :disabled="busy">Добавить</button>
+        <div style="flex: 2; min-width: 200px"><label>{{ t('field.email') }}</label><input v-model="editorForm.email" type="email" required /></div>
+        <div style="flex: 1; min-width: 150px"><label>{{ t('field.name') }}</label><input v-model="editorForm.name" required /></div>
+        <div style="flex: 1; min-width: 150px"><label>{{ t('field.password') }}</label><input v-model="editorForm.password" type="password" required minlength="8" autocomplete="new-password" /></div>
+        <button class="primary" :disabled="busy">{{ t('common.add') }}</button>
       </div>
     </form>
 
@@ -103,34 +104,34 @@ onMounted(() => run(async () => {}))
     <div v-if="accessFor" class="card">
       <AccessPicker
         :key="accessFor.id"
-        :title="'Каналы редактора ' + accessFor.name"
+        :title="t('users.channelsOf', { name: accessFor.name })"
         :options="channelOptions"
         :selected="pickedIds(accessFor)"
-        empty="Каналов пока нет. Подключите канал на странице «Каналы»."
+        :empty="t('users.noChannels')"
         @save="saveAccess"
         @cancel="accessFor = null"
       />
     </div>
 
-    <h3 class="section-title">Мои редакторы</h3>
+    <h3 class="section-title">{{ t('users.myEditors') }}</h3>
     <SkeletonTable v-if="loading" :rows="3" :cols="4" />
     <div v-else class="card table-wrap">
-      <p v-if="!users.length" class="muted">Редакторов пока нет.</p>
+      <p v-if="!users.length" class="muted">{{ t('users.noEditors') }}</p>
       <table v-else class="stack">
-        <thead><tr><th>Имя</th><th>Email</th><th>Каналы</th><th>Создан</th><th /></tr></thead>
+        <thead><tr><th>{{ t('users.col.name') }}</th><th>{{ t('field.email') }}</th><th>{{ t('users.col.channels') }}</th><th>{{ t('users.col.created') }}</th><th /></tr></thead>
         <tbody>
           <tr v-for="u in users" :key="u.id">
-            <td data-label="Имя">{{ u.name }}</td>
-            <td data-label="Email">{{ u.email }}</td>
-            <td class="wrap" data-label="Каналы">
-              <span v-if="!u.channels.length" class="warn">нет доступа</span>
+            <td :data-label="t('users.col.name')">{{ u.name }}</td>
+            <td :data-label="t('field.email')">{{ u.email }}</td>
+            <td class="wrap" :data-label="t('users.col.channels')">
+              <span v-if="!u.channels.length" class="warn">{{ t('users.noAccess') }}</span>
               <span v-else class="chips-inline"><span v-for="c in u.channels" :key="c.id" class="tagchip">{{ c.title }}</span></span>
             </td>
-            <td data-label="Создан">{{ fmtDate(u.created_at) }}</td>
+            <td :data-label="t('users.col.created')">{{ fmtDate(u.created_at) }}</td>
             <td class="num actions-cell">
-              <button :disabled="busy" @click="accessFor = u">Каналы</button>
-              <button :disabled="busy" @click="resetPassword(u)">Сбросить пароль</button>
-              <button class="danger" :disabled="busy" @click="removeEditor(u)">Удалить</button>
+              <button :disabled="busy" @click="accessFor = u">{{ t('users.channelsBtn') }}</button>
+              <button :disabled="busy" @click="resetPassword(u)">{{ t('users.resetPassword') }}</button>
+              <button class="danger" :disabled="busy" @click="removeEditor(u)">{{ t('common.delete') }}</button>
             </td>
           </tr>
         </tbody>
@@ -138,37 +139,37 @@ onMounted(() => run(async () => {}))
     </div>
 
     <template v-if="isSuper">
-      <h3 class="section-title">Администраторы</h3>
+      <h3 class="section-title">{{ t('users.admins') }}</h3>
       <form class="card" @submit.prevent="create('admin', adminForm)">
-        <h3>Новый администратор</h3>
-        <p class="muted mb-3">У каждого администратора своё изолированное пространство: свои каналы, редакторы и источники парсера. Вы их не увидите.</p>
+        <h3>{{ t('users.newAdmin') }}</h3>
+        <p class="muted mb-3">{{ t('users.newAdminHint') }}</p>
         <div class="row" style="align-items: flex-end">
-          <div style="flex: 2; min-width: 200px"><label>Email</label><input v-model="adminForm.email" type="email" required /></div>
-          <div style="flex: 1; min-width: 150px"><label>Имя</label><input v-model="adminForm.name" required /></div>
-          <div style="flex: 1; min-width: 150px"><label>Пароль</label><input v-model="adminForm.password" type="password" required minlength="8" autocomplete="new-password" /></div>
-          <button class="primary" :disabled="busy">Добавить</button>
+          <div style="flex: 2; min-width: 200px"><label>{{ t('field.email') }}</label><input v-model="adminForm.email" type="email" required /></div>
+          <div style="flex: 1; min-width: 150px"><label>{{ t('field.name') }}</label><input v-model="adminForm.name" required /></div>
+          <div style="flex: 1; min-width: 150px"><label>{{ t('field.password') }}</label><input v-model="adminForm.password" type="password" required minlength="8" autocomplete="new-password" /></div>
+          <button class="primary" :disabled="busy">{{ t('common.add') }}</button>
         </div>
       </form>
 
       <SkeletonTable v-if="loading" :rows="3" :cols="5" />
       <div v-else class="card table-wrap">
         <table class="stack">
-          <thead><tr><th>Имя</th><th>Email</th><th>Каналов</th><th>Редакторов</th><th>Создан</th><th /></tr></thead>
+          <thead><tr><th>{{ t('users.col.name') }}</th><th>{{ t('field.email') }}</th><th>{{ t('users.col.channelsCount') }}</th><th>{{ t('users.col.editorsCount') }}</th><th>{{ t('users.col.created') }}</th><th /></tr></thead>
           <tbody>
             <tr v-for="a in admins" :key="a.id">
-              <td data-label="Имя">
+              <td :data-label="t('users.col.name')">
                 {{ a.name }}
-                <span v-if="a.id === me?.id" class="tagchip">вы</span>
-                <span v-else-if="a.is_super" class="tagchip">главный</span>
+                <span v-if="a.id === me?.id" class="tagchip">{{ t('users.you') }}</span>
+                <span v-else-if="a.is_super" class="tagchip">{{ t('users.main') }}</span>
               </td>
-              <td data-label="Email">{{ a.email }}</td>
-              <td data-label="Каналов">{{ a.channels_count }}</td>
-              <td data-label="Редакторов">{{ a.editors_count }}</td>
-              <td data-label="Создан">{{ fmtDate(a.created_at) }}</td>
+              <td :data-label="t('field.email')">{{ a.email }}</td>
+              <td :data-label="t('users.col.channelsCount')">{{ a.channels_count }}</td>
+              <td :data-label="t('users.col.editorsCount')">{{ a.editors_count }}</td>
+              <td :data-label="t('users.col.created')">{{ fmtDate(a.created_at) }}</td>
               <td class="num actions-cell">
                 <template v-if="a.id !== me?.id && !a.is_super">
-                  <button :disabled="busy" @click="resetPassword(a)">Сбросить пароль</button>
-                  <button class="danger" :disabled="busy" @click="removeAdmin(a)">Удалить</button>
+                  <button :disabled="busy" @click="resetPassword(a)">{{ t('users.resetPassword') }}</button>
+                  <button class="danger" :disabled="busy" @click="removeAdmin(a)">{{ t('common.delete') }}</button>
                 </template>
               </td>
             </tr>
@@ -178,9 +179,8 @@ onMounted(() => run(async () => {}))
     </template>
 
     <p class="muted">
-      Администратор работает в своём изолированном пространстве: видит только свои каналы, посты, метрики и источники парсера, и управляет только своими редакторами.
-      Редактор работает только с каналами, которые за ним закреплены.
-      <template v-if="isSuper">Главный администратор дополнительно создаёт других администраторов и может удалить их вместе с их пространством.</template>
+      {{ t('users.footer') }}
+      <template v-if="isSuper">{{ t('users.footerSuper') }}</template>
     </p>
   </section>
 </template>

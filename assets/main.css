@@ -288,3 +288,8 @@ button.link { min-height: 0; padding: 0; border: 0; background: none; color: var
   .wallet-row { flex-direction: column; align-items: stretch; }
 }
 progress.upload-progress { display: block; width: 100%; height: 8px; margin-top: 10px; accent-color: var(--accent); }
+
+/* переключатель языка на страницах входа и регистрации */
+.lang-buttons { display: flex; justify-content: flex-end; gap: var(--s-1); margin-bottom: var(--s-3); }
+.lang-buttons button { padding: 2px var(--s-3); border-radius: 99px; font-size: 13px; color: var(--muted); }
+.lang-buttons button.active { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); font-weight: 600; }

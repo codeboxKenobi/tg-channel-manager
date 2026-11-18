@@ -2,6 +2,7 @@
 // Единое окно подтверждения/ввода. Выглядит как остальные формы: карточка, заголовок h2, подписи, ряд кнопок
 // «действие + Отмена». Рисуется один раз в app.vue, вызывается через useDialog().
 const { current, close } = useDialog()
+const { t } = useLocale()
 const route = useRoute()
 
 const value = ref('')
@@ -127,9 +128,9 @@ onBeforeUnmount(() => {
 
         <div class="actions">
           <button ref="submitBtn" type="submit" :class="current.opts.danger ? 'danger' : 'primary'">
-            {{ current.opts.confirmText ?? 'Подтвердить' }}
+            {{ current.opts.confirmText ?? t('common.confirm') }}
           </button>
-          <button ref="cancelBtn" type="button" @click="cancel">{{ current.opts.cancelText ?? 'Отмена' }}</button>
+          <button ref="cancelBtn" type="button" @click="cancel">{{ current.opts.cancelText ?? t('common.cancel') }}</button>
         </div>
       </form>
     </div>

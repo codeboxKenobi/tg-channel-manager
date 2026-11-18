@@ -3,6 +3,7 @@
 const props = defineProps<{ modelValue: string | null }>()
 const emit = defineEmits<{ 'update:modelValue': [value: string | null] }>()
 
+const { t, intlLocale } = useLocale()
 const pad = (n: number) => String(n).padStart(2, '0')
 const hours = Array.from({ length: 24 }, (_, i) => pad(i))
 const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
@@ -71,7 +72,7 @@ function openPicker(e: Event) {
 }
 
 const summary = computed(() =>
-  props.modelValue ? new Date(props.modelValue).toLocaleString('ru-RU', { dateStyle: 'full', timeStyle: 'short' }) : '',
+  props.modelValue ? new Date(props.modelValue).toLocaleString(intlLocale.value, { dateStyle: 'full', timeStyle: 'short' }) : '',
 )
 const inPast = computed(() => (props.modelValue ? new Date(props.modelValue).getTime() < Date.now() : false))
 </script>
@@ -79,29 +80,29 @@ const inPast = computed(() => (props.modelValue ? new Date(props.modelValue).get
 <template>
   <div>
     <div class="dt">
-      <input v-model="state.date" type="date" aria-label="Дата публикации" @click="openPicker" />
+      <input v-model="state.date" type="date" :aria-label="t('dt.dateAria')" @click="openPicker" />
       <div class="dt-time">
-        <select v-model="state.hour" aria-label="Часы" :disabled="!state.date">
-          <option value="" disabled>чч</option>
+        <select v-model="state.hour" :aria-label="t('dt.hoursAria')" :disabled="!state.date">
+          <option value="" disabled>{{ t('dt.hh') }}</option>
           <option v-for="h in hours" :key="h" :value="h">{{ h }}</option>
         </select>
         <span>:</span>
-        <select v-model="state.minute" aria-label="Минуты" :disabled="!state.date">
-          <option value="" disabled>мм</option>
+        <select v-model="state.minute" :aria-label="t('dt.minutesAria')" :disabled="!state.date">
+          <option value="" disabled>{{ t('dt.mm') }}</option>
           <option v-for="m in minutes" :key="m" :value="m">{{ m }}</option>
         </select>
       </div>
     </div>
 
     <div class="chips">
-      <button type="button" class="chip" @click="preset('hour')">Через час</button>
-      <button type="button" class="chip" @click="preset('evening')">Сегодня в 18:00</button>
-      <button type="button" class="chip" @click="preset('morning')">Завтра в 9:00</button>
-      <button v-if="state.date" type="button" class="chip" @click="load(null)">Очистить</button>
+      <button type="button" class="chip" @click="preset('hour')">{{ t('dt.inHour') }}</button>
+      <button type="button" class="chip" @click="preset('evening')">{{ t('dt.today18') }}</button>
+      <button type="button" class="chip" @click="preset('morning')">{{ t('dt.tomorrow9') }}</button>
+      <button v-if="state.date" type="button" class="chip" @click="load(null)">{{ t('dt.clear') }}</button>
     </div>
 
     <p v-if="summary" class="dt-summary" :class="inPast ? 'warn' : 'muted'">
-      {{ inPast ? 'Время уже прошло: пост опубликуется в течение минуты. ' : 'Опубликуется: ' }}{{ summary }}
+      {{ inPast ? t('dt.pastWarn') : t('dt.willPublish') }} {{ summary }}
     </p>
   </div>
 </template>

@@ -2,6 +2,7 @@
 const api = useApi()
 const dialog = useDialog()
 const { isAdmin } = useAuth()
+const { t, tServer } = useLocale()
 const channels = ref<any[]>([])
 const posts = ref<any[]>([])
 const channelId = ref<number | ''>('')
@@ -10,13 +11,6 @@ const creating = ref(false)
 const error = ref('')
 const busy = ref(false)
 const loading = ref(true)
-
-const STATUS: Record<string, string> = {
-  draft: 'Черновик',
-  scheduled: 'В графике',
-  publishing: 'Публикуется',
-  failed: 'Ошибка публикации',
-}
 
 async function load() {
   try {
@@ -50,9 +44,9 @@ const save = (payload: any) =>
   })
 const publishNow = async (p: any) => {
   const sure = await dialog.confirm({
-    title: 'Опубликовать пост?',
-    message: `Пост «${p.title}» будет сразу опубликован в канале «${p.channel_title}».`,
-    confirmText: 'Опубликовать',
+    title: t('drafts.publishTitle'),
+    message: t('drafts.publishMsg', { title: p.title, channel: p.channel_title }),
+    confirmText: t('drafts.publishConfirm'),
   })
   if (sure) await run(() => api(`/posts/${p.id}/publish`, { method: 'POST' }))
 }
@@ -60,9 +54,9 @@ const unschedule = (p: any) =>
   run(() => api(`/posts/${p.id}`, { method: 'PUT', body: { ...p, scheduled_at: null } }))
 const remove = async (p: any) => {
   const sure = await dialog.confirm({
-    title: 'Удалить пост?',
-    message: `Пост «${p.title}» будет удалён.`,
-    confirmText: 'Удалить',
+    title: t('drafts.deleteTitle'),
+    message: t('drafts.deleteMsg', { title: p.title }),
+    confirmText: t('common.delete'),
     danger: true,
   })
   if (sure) await run(() => api(`/posts/${p.id}`, { method: 'DELETE' }))
@@ -98,24 +92,24 @@ watch(channelId, () => {
 <template>
   <section :aria-busy="loading">
     <div class="row between head">
-      <h1>Подготовка постов</h1>
+      <h1>{{ t('drafts.title') }}</h1>
       <div class="row">
         <select v-model="channelId" class="filter">
-          <option value="">Все каналы</option>
+          <option value="">{{ t('common.allChannels') }}</option>
           <option v-for="c in channels" :key="c.id" :value="c.id">{{ c.title }}</option>
         </select>
-        <button class="primary" :disabled="!channels.length" @click="startCreate">Новый пост</button>
+        <button class="primary" :disabled="!channels.length" @click="startCreate">{{ t('post.new') }}</button>
       </div>
     </div>
 
-    <p v-if="!loading && !channels.length" class="muted">{{ isAdmin ? 'Сначала подключите канал на странице «Каналы».' : 'Вам пока не назначены каналы. Обратитесь к администратору.' }}</p>
+    <p v-if="!loading && !channels.length" class="muted">{{ isAdmin ? t('drafts.noChannelsAdmin') : t('channels.emptyEditor') }}</p>
     <p v-if="error" class="error">{{ error }}</p>
 
     <div v-if="creating || editing" class="card">
       <PostForm :key="editing?.id ?? 'new'" :channels="channels" :post="editing" @save="save" @cancel="closeForm" />
     </div>
 
-    <p v-if="!loading && channels.length && !posts.length" class="muted">Постов в подготовке нет. Создайте новый.</p>
+    <p v-if="!loading && channels.length && !posts.length" class="muted">{{ t('drafts.empty') }}</p>
 
     <SkeletonCards v-if="loading" :count="3" :actions="4" />
 
@@ -125,19 +119,19 @@ watch(channelId, () => {
           <strong>{{ p.title }}</strong>
           <span class="muted"> · {{ p.channel_title }}</span>
         </div>
-        <span class="badge" :class="p.status">{{ STATUS[p.status] }}</span>
+        <span class="badge" :class="p.status">{{ t('status.' + p.status) }}</span>
       </div>
       <p class="post-content">{{ p.content }}</p>
       <video v-if="isVideoUrl(p.media_url)" :src="p.media_url" class="thumb" controls playsinline preload="metadata" />
       <img v-else-if="p.media_url" :src="p.media_url" class="thumb" alt="" loading="lazy" @error="($event.target as HTMLImageElement).style.display = 'none'" />
-      <p v-if="p.scheduled_at" class="muted mt-2">Публикация: {{ fmtDate(p.scheduled_at) }}</p>
-      <p v-if="p.author_name" class="muted mt-2">Автор: {{ p.author_name }}</p>
-      <p v-if="p.error" class="error mt-2">{{ p.error }}</p>
+      <p v-if="p.scheduled_at" class="muted mt-2">{{ t('drafts.publishAt') }}: {{ fmtDate(p.scheduled_at) }}</p>
+      <p v-if="p.author_name" class="muted mt-2">{{ t('common.author') }}: {{ p.author_name }}</p>
+      <p v-if="p.error" class="error mt-2">{{ tServer(p.error) }}</p>
       <div class="actions">
-        <button :disabled="busy || p.status === 'publishing'" @click="startEdit(p)">Редактировать</button>
-        <button class="primary" :disabled="busy || p.status === 'publishing'" @click="publishNow(p)">Опубликовать сейчас</button>
-        <button v-if="p.status === 'scheduled'" :disabled="busy" @click="unschedule(p)">Убрать из графика</button>
-        <button class="danger" :disabled="busy || p.status === 'publishing'" @click="remove(p)">Удалить</button>
+        <button :disabled="busy || p.status === 'publishing'" @click="startEdit(p)">{{ t('drafts.edit') }}</button>
+        <button class="primary" :disabled="busy || p.status === 'publishing'" @click="publishNow(p)">{{ t('drafts.publishNow') }}</button>
+        <button v-if="p.status === 'scheduled'" :disabled="busy" @click="unschedule(p)">{{ t('drafts.unschedule') }}</button>
+        <button class="danger" :disabled="busy || p.status === 'publishing'" @click="remove(p)">{{ t('common.delete') }}</button>
       </div>
     </article>
   </section>

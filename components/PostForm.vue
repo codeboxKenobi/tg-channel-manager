@@ -2,6 +2,7 @@
 const props = defineProps<{ channels: any[]; post?: any | null }>()
 const emit = defineEmits<{ save: [payload: any]; cancel: [] }>()
 const api = useApi()
+const { t } = useLocale()
 
 const UPLOAD_PREFIX = '/api/uploads/'
 
@@ -33,9 +34,9 @@ async function onFile(e: Event) {
   try {
     if (looksLikeVideo(file)) {
       // видео уходит как есть (без перекодирования), с индикатором прогресса
-      if (!isMp4File(file)) throw new Error('Поддерживается только видео MP4 (H.264). Видео с iPhone (.mov) и другие форматы сначала сохраните или экспортируйте как MP4')
-      if (!file.size) throw new Error('Файл пустой')
-      if (file.size > MAX_VIDEO_BYTES) throw new Error(`Видео ${Math.ceil(file.size / 1048576)} МБ: Telegram принимает от бота файлы до 50 МБ`)
+      if (!isMp4File(file)) throw new Error(t('post.err.mp4Only'))
+      if (!file.size) throw new Error(t('post.err.empty'))
+      if (file.size > MAX_VIDEO_BYTES) throw new Error(t('post.err.videoTooBig', { mb: Math.ceil(file.size / 1048576) }))
       form.media_url = (await uploadFile(file, 'video/mp4', (p) => (progress.value = p))).url
     } else {
       const blob = await toJpeg(file)
@@ -72,54 +73,54 @@ function submit() {
 
 <template>
   <form @submit.prevent="submit">
-    <h2>{{ post ? 'Редактирование поста' : 'Новый пост' }}</h2>
+    <h2>{{ post ? t('post.edit') : t('post.new') }}</h2>
 
-    <label>Канал</label>
+    <label>{{ t('common.channel') }}</label>
     <select v-model="form.channel_id" required>
       <option v-for="c in channels" :key="c.id" :value="c.id">{{ c.title }}</option>
     </select>
 
-    <label>Заголовок (виден только вам)</label>
+    <label>{{ t('post.titleLabel') }}</label>
     <input v-model="form.title" required maxlength="200" />
 
-    <label>Текст поста ({{ form.content.length }} / {{ limit }})</label>
+    <label>{{ t('post.textLabel', { len: form.content.length, limit }) }}</label>
     <textarea v-model="form.content" required :maxlength="limit" />
 
     <div class="row" style="align-items: flex-start">
       <div style="flex: 2; min-width: 220px">
-        <label>Ссылка на изображение или видео (необязательно)</label>
+        <label>{{ t('post.mediaLabel') }}</label>
         <input v-if="!isUploaded" v-model="form.media_url" type="url" placeholder="https://…" />
-        <input v-else :value="isVideo ? 'Видео сохранено' : 'Загружено с устройства'" readonly disabled />
+        <input v-else :value="isVideo ? t('post.videoSaved') : t('post.uploadedFromDevice')" readonly disabled />
 
         <div class="upload">
           <label class="filebtn" :class="{ busy: uploading }">
-            {{ uploading ? (progress ? `Загрузка… ${progress}%` : 'Загрузка…') : 'Загрузить с устройства' }}
+            {{ uploading ? (progress ? t('post.uploadingPct', { p: progress }) : t('post.uploading')) : t('post.upload') }}
             <input type="file" accept="image/*,video/mp4,.mp4" :disabled="uploading" @change="onFile" />
           </label>
-          <button v-if="form.media_url" type="button" class="danger" @click="form.media_url = ''">{{ isVideo ? 'Убрать видео' : 'Убрать картинку' }}</button>
+          <button v-if="form.media_url" type="button" class="danger" @click="form.media_url = ''">{{ isVideo ? t('post.removeVideo') : t('post.removeImage') }}</button>
         </div>
         <progress v-if="uploading && progress" class="upload-progress" :value="progress" max="100" />
-        <p class="muted" style="margin: 8px 0 0; font-size: 13px">Картинка (JPEG, PNG, WebP) или видео MP4 до 50 МБ</p>
+        <p class="muted" style="margin: 8px 0 0; font-size: 13px">{{ t('post.mediaHint') }}</p>
         <p v-if="uploadError" class="error mt-2">{{ uploadError }}</p>
         <video v-if="showPreview && isVideo" :key="form.media_url" :src="form.media_url" class="preview" controls playsinline preload="metadata" />
-        <img v-else-if="showPreview" :key="form.media_url" :src="form.media_url" class="preview" alt="Предпросмотр картинки" />
+        <img v-else-if="showPreview" :key="form.media_url" :src="form.media_url" class="preview" :alt="t('post.previewAlt')" />
       </div>
       <div style="flex: 1; min-width: 160px">
-        <label>Форматирование</label>
+        <label>{{ t('post.format') }}</label>
         <select v-model="form.parse_mode">
-          <option value="">Без форматирования</option>
+          <option value="">{{ t('post.formatNone') }}</option>
           <option value="HTML">HTML</option>
           <option value="MarkdownV2">MarkdownV2</option>
         </select>
       </div>
     </div>
 
-    <label>Время публикации (не выбрано — сохранить как черновик)</label>
+    <label>{{ t('post.timeLabel') }}</label>
     <DateTimePicker v-model="form.scheduled_at" />
 
     <div class="actions">
-      <button class="primary" type="submit" :disabled="uploading">{{ form.scheduled_at ? 'Запланировать' : 'Сохранить черновик' }}</button>
-      <button type="button" @click="emit('cancel')">Отмена</button>
+      <button class="primary" type="submit" :disabled="uploading">{{ form.scheduled_at ? t('post.schedule') : t('post.saveDraft') }}</button>
+      <button type="button" @click="emit('cancel')">{{ t('common.cancel') }}</button>
     </div>
   </form>
 </template>

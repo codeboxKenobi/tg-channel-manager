@@ -1,4 +1,7 @@
-export const fmtDate = (d?: string | null) =>
-  d ? new Date(d).toLocaleString('ru-RU', { dateStyle: 'medium', timeStyle: 'short' }) : '—'
+import { useLocale } from '../composables/useLocale'
 
-export const fmtNum = (n?: number | null) => new Intl.NumberFormat('ru-RU').format(n ?? 0)
+// Формат даты и чисел зависит от языка интерфейса (ru-RU / en-GB)
+export const fmtDate = (d?: string | null) =>
+  d ? new Date(d).toLocaleString(useLocale().intlLocale.value, { dateStyle: 'medium', timeStyle: 'short' }) : '—'
+
+export const fmtNum = (n?: number | null) => new Intl.NumberFormat(useLocale().intlLocale.value).format(n ?? 0)

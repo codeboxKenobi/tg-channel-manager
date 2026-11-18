@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const api = useApi()
+const { t, locale } = useLocale()
 const overview = ref<any>(null)
 const channels = ref<any[]>([])
 const timeline = ref<any[]>([])
@@ -16,7 +17,7 @@ async function load() {
   error.value = ''
   try {
     const query = { channel_id: channelId.value || undefined }
-    const [o, c, t, s, tp] = await Promise.all([
+    const [o, c, tl, s, tp] = await Promise.all([
       api('/metrics/overview', { query }),
       api('/metrics/channels'),
       api('/metrics/timeline', { query }),
@@ -26,7 +27,7 @@ async function load() {
     if (current !== requestId) return
     overview.value = o
     channels.value = c
-    timeline.value = t
+    timeline.value = tl
     subscribers.value = s
     top.value = tp
   } catch (e: any) {
@@ -36,8 +37,8 @@ async function load() {
   }
 }
 
-// 'YYYY-MM-DD' -> 'DD.MM' (одинаковые подписи у всех графиков)
-const fmtDay = (day: string) => `${day.slice(8, 10)}.${day.slice(5, 7)}`
+// 'YYYY-MM-DD' -> 'DD.MM' (en: 'DD/MM'); одинаковые подписи у всех графиков
+const fmtDay = (day: string) => `${day.slice(8, 10)}${locale.value === 'ru' ? '.' : '/'}${day.slice(5, 7)}`
 
 const postsSeries = computed(() => timeline.value.map((d) => ({ label: fmtDay(d.day), value: d.posts })))
 const likesSeries = computed(() => timeline.value.map((d) => ({ label: fmtDay(d.day), value: d.likes })))
@@ -50,7 +51,7 @@ const subsLast = computed(() => (subsSeries.value.length ? fmtNum(subsSeries.val
 
 const selected = computed(() => channels.value.find((c) => c.id === channelId.value))
 const visibleChannels = computed(() => (channelId.value ? channels.value.filter((c) => c.id === channelId.value) : channels.value))
-const scopeLabel = computed(() => (selected.value ? `«${selected.value.title}»` : 'во всех каналах'))
+const scopeLabel = computed(() => (selected.value ? t('metrics.scopeOne', { title: selected.value.title }) : t('metrics.scopeAll')))
 
 onMounted(load)
 watch(channelId, () => {
@@ -62,9 +63,9 @@ watch(channelId, () => {
 <template>
   <section :aria-busy="loading">
     <div class="row between head">
-      <h1>Метрики</h1>
+      <h1>{{ t('metrics.title') }}</h1>
       <select v-model="channelId" class="filter">
-        <option value="">Все каналы</option>
+        <option value="">{{ t('common.allChannels') }}</option>
         <option v-for="c in channels" :key="c.id" :value="c.id">{{ c.title }}</option>
       </select>
     </div>
@@ -77,60 +78,60 @@ watch(channelId, () => {
       </div>
     </div>
     <div v-else-if="overview" class="grid">
-      <div class="card stat"><b>{{ fmtNum(overview.subscribers) }}</b><span>Подписчиков {{ scopeLabel }}</span></div>
-      <div class="card stat"><b>{{ fmtNum(overview.published) }}</b><span>Опубликовано постов</span></div>
-      <div class="card stat"><b>{{ fmtNum(overview.likes) }}</b><span>Лайков всего</span></div>
-      <div class="card stat"><b>{{ fmtNum(overview.scheduled) }}</b><span>В графике</span></div>
-      <div class="card stat"><b>{{ fmtNum(overview.drafts) }}</b><span>Черновиков</span></div>
+      <div class="card stat"><b>{{ fmtNum(overview.subscribers) }}</b><span>{{ t('metrics.subscribersScope', { scope: scopeLabel }) }}</span></div>
+      <div class="card stat"><b>{{ fmtNum(overview.published) }}</b><span>{{ t('metrics.publishedPosts') }}</span></div>
+      <div class="card stat"><b>{{ fmtNum(overview.likes) }}</b><span>{{ t('metrics.likesTotal') }}</span></div>
+      <div class="card stat"><b>{{ fmtNum(overview.scheduled) }}</b><span>{{ t('metrics.scheduled') }}</span></div>
+      <div class="card stat"><b>{{ fmtNum(overview.drafts) }}</b><span>{{ t('metrics.drafts') }}</span></div>
     </div>
 
-    <h2>Динамика за 30 дней</h2>
+    <h2>{{ t('metrics.dynamics') }}</h2>
     <div class="charts">
       <template v-if="loading">
         <SkeletonChart v-for="n in 3" :key="n" />
       </template>
       <template v-else>
-        <BarChart title="Публикации по дням" :items="postsSeries" :summary="postsTotal" />
-        <BarChart title="Лайки по дням" :items="likesSeries" :summary="likesTotal" />
-        <BarChart title="Подписчики" :items="subsSeries" :summary="subsLast" from-min />
+        <BarChart :title="t('metrics.chartPosts')" :items="postsSeries" :summary="postsTotal" />
+        <BarChart :title="t('metrics.chartLikes')" :items="likesSeries" :summary="likesTotal" />
+        <BarChart :title="t('metrics.chartSubs')" :items="subsSeries" :summary="subsLast" from-min />
       </template>
     </div>
 
-    <h2>{{ selected ? 'Канал' : 'Каналы' }}</h2>
+    <h2>{{ selected ? t('metrics.channelOne') : t('metrics.channelMany') }}</h2>
     <SkeletonTable v-if="loading" :rows="3" :cols="6" />
     <div v-else class="card table-wrap">
       <table class="stack">
         <thead>
           <tr>
-            <th>Канал</th><th class="num">Подписчики</th><th class="num">Рост за 30 дней</th>
-            <th class="num">Постов</th><th class="num">Лайков</th><th class="num">Лайков на пост</th>
+            <th>{{ t('metrics.col.channel') }}</th><th class="num">{{ t('metrics.col.subscribers') }}</th><th class="num">{{ t('metrics.col.growth') }}</th>
+            <th class="num">{{ t('metrics.col.posts') }}</th><th class="num">{{ t('metrics.col.likes') }}</th><th class="num">{{ t('metrics.col.likesPerPost') }}</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="c in visibleChannels" :key="c.id">
-            <td data-label="Канал">{{ c.title }}</td>
-            <td class="num" data-label="Подписчики">{{ fmtNum(c.subscribers_count) }}</td>
-            <td class="num" data-label="Рост за 30 дней" :class="{ pos: c.growth_30d > 0 }">{{ c.growth_30d > 0 ? '+' : '' }}{{ fmtNum(c.growth_30d) }}</td>
-            <td class="num" data-label="Постов">{{ fmtNum(c.posts) }}</td>
-            <td class="num" data-label="Лайков">{{ fmtNum(c.likes) }}</td>
-            <td class="num" data-label="Лайков на пост">{{ c.avg_likes }}</td>
+            <td :data-label="t('metrics.col.channel')">{{ c.title }}</td>
+            <td class="num" :data-label="t('metrics.col.subscribers')">{{ fmtNum(c.subscribers_count) }}</td>
+            <td class="num" :data-label="t('metrics.col.growth')" :class="{ pos: c.growth_30d > 0 }">{{ c.growth_30d > 0 ? '+' : '' }}{{ fmtNum(c.growth_30d) }}</td>
+            <td class="num" :data-label="t('metrics.col.posts')">{{ fmtNum(c.posts) }}</td>
+            <td class="num" :data-label="t('metrics.col.likes')">{{ fmtNum(c.likes) }}</td>
+            <td class="num" :data-label="t('metrics.col.likesPerPost')">{{ c.avg_likes }}</td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <h2>Лучшие посты по лайкам</h2>
+    <h2>{{ t('metrics.topPosts') }}</h2>
     <SkeletonTable v-if="loading" :rows="5" :cols="4" />
     <div v-else class="card table-wrap">
-      <p v-if="!top.length" class="muted">Опубликованных постов пока нет.</p>
+      <p v-if="!top.length" class="muted">{{ t('published.empty') }}</p>
       <table v-else class="stack">
-        <thead><tr><th>Пост</th><th>Канал</th><th>Дата</th><th class="num">Лайки</th></tr></thead>
+        <thead><tr><th>{{ t('metrics.col.post') }}</th><th>{{ t('metrics.col.channel') }}</th><th>{{ t('metrics.col.date') }}</th><th class="num">{{ t('metrics.col.likesShort') }}</th></tr></thead>
         <tbody>
           <tr v-for="p in top" :key="p.id">
-            <td data-label="Пост">{{ p.title }}</td>
-            <td data-label="Канал">{{ p.channel_title }}</td>
-            <td data-label="Дата">{{ fmtDate(p.published_at) }}</td>
-            <td class="num" data-label="Лайки">{{ fmtNum(p.likes_count) }}</td>
+            <td :data-label="t('metrics.col.post')">{{ p.title }}</td>
+            <td :data-label="t('metrics.col.channel')">{{ p.channel_title }}</td>
+            <td :data-label="t('metrics.col.date')">{{ fmtDate(p.published_at) }}</td>
+            <td class="num" :data-label="t('metrics.col.likesShort')">{{ fmtNum(p.likes_count) }}</td>
           </tr>
         </tbody>
       </table>

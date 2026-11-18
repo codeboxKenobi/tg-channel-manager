@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const { needsSetup, login, setup, registration } = useAuth()
+const { t } = useLocale()
 const email = ref('')
 const name = ref('')
 const password = ref('')
@@ -23,27 +24,28 @@ async function submit() {
 
 <template>
   <form class="card auth-card" @submit.prevent="submit">
+    <LangSwitch variant="buttons" />
     <AuthBrand />
-    <h1>{{ needsSetup ? 'Создание администратора' : 'Вход' }}</h1>
-    <p v-if="needsSetup" class="muted">Пользователей пока нет. Эта учётная запись станет администратором.</p>
+    <h1>{{ needsSetup ? t('login.titleSetup') : t('login.title') }}</h1>
+    <p v-if="needsSetup" class="muted">{{ t('login.noUsers') }}</p>
 
-    <label>Email</label>
+    <label>{{ t('field.email') }}</label>
     <input v-model="email" type="email" required autocomplete="username" autofocus />
 
     <template v-if="needsSetup">
-      <label>Имя</label>
+      <label>{{ t('field.name') }}</label>
       <input v-model="name" required autocomplete="name" />
     </template>
 
-    <label>Пароль{{ needsSetup ? ' (не короче 8 символов)' : '' }}</label>
+    <label>{{ needsSetup ? t('field.passwordMin') : t('field.password') }}</label>
     <input v-model="password" type="password" required :minlength="needsSetup ? 8 : undefined" :autocomplete="needsSetup ? 'new-password' : 'current-password'" />
 
     <p v-if="error" class="error mt-3">{{ error }}</p>
     <div class="actions">
-      <button class="primary" :disabled="busy">{{ needsSetup ? 'Создать и войти' : 'Войти' }}</button>
+      <button class="primary" :disabled="busy">{{ needsSetup ? t('login.createAndSignIn') : t('login.submit') }}</button>
     </div>
     <p v-if="!needsSetup && registration.open" class="muted mt-4">
-      Нет аккаунта? <NuxtLink to="/register">Зарегистрироваться</NuxtLink>
+      {{ t('login.noAccount') }} <NuxtLink to="/register">{{ t('login.register') }}</NuxtLink>
     </p>
   </form>
 </template>

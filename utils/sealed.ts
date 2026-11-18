@@ -1,3 +1,5 @@
+import { useLocale } from '../composables/useLocale'
+
 // Шифрование паролей перед отправкой: RSA-OAEP (SHA-256) публичным ключом сервера.
 // Реализовано на чистом JS (BigInt), потому что crypto.subtle недоступен на страницах по http://,
 // а сайт может работать без HTTPS. Случайность берётся из crypto.getRandomValues (доступен и без HTTPS).
@@ -81,7 +83,7 @@ function mgf1(seed: Uint8Array, length: number): Uint8Array {
 /** RSAES-OAEP (RFC 8017) с SHA-256 и пустой меткой: M → EM длиной k байт. */
 function oaepEncode(message: Uint8Array, k: number): Uint8Array {
   const maxLen = k - 2 * H - 2
-  if (message.length > maxLen) throw new Error('Сообщение слишком длинное для RSA-блока')
+  if (message.length > maxLen) throw new Error(useLocale().t('sealed.err.tooLong'))
   const db = new Uint8Array(k - H - 1)
   db.set(sha256(new Uint8Array(0))) // lHash; дальше нули (PS), 0x01 и сообщение
   db[db.length - message.length - 1] = 0x01

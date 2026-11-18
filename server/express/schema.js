@@ -140,4 +140,7 @@ create unique index if not exists channels_owner_chat_idx on channels (owner_id,
 -- последняя активность пользователя: по ней удаляются аккаунты, неактивные дольше INACTIVE_DAYS дней (по умолчанию 90)
 alter table users add column if not exists last_active_at timestamptz not null default now();
 create index if not exists users_last_active_idx on users (last_active_at);
+
+-- язык интерфейса пользователя (ru | en); применяется после входа на любом устройстве
+alter table users add column if not exists lang text not null default 'ru';
 `;

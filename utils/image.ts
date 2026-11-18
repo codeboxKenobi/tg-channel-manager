@@ -1,11 +1,14 @@
+import { useLocale } from '../composables/useLocale'
+
 /** Уменьшает фото до maxSide пикселей по длинной стороне и сжимает в JPEG (быстрее загрузка, нет проблем с лимитами). */
 export async function toJpeg(file: File, maxSide = 1600, quality = 0.85): Promise<Blob> {
-  if (!file.type.startsWith('image/')) throw new Error('Выберите файл изображения')
+  const { t } = useLocale()
+  if (!file.type.startsWith('image/')) throw new Error(t('image.err.notImage'))
   let bitmap: ImageBitmap
   try {
     bitmap = await createImageBitmap(file)
   } catch {
-    throw new Error('Не удалось прочитать изображение. Попробуйте JPEG, PNG или WebP')
+    throw new Error(t('image.err.unreadable'))
   }
   const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height))
   const w = Math.max(1, Math.round(bitmap.width * scale))
@@ -21,6 +24,6 @@ export async function toJpeg(file: File, maxSide = 1600, quality = 0.85): Promis
   bitmap.close()
 
   return new Promise((resolve, reject) =>
-    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Не удалось обработать изображение'))), 'image/jpeg', quality),
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error(t('image.err.processing')))), 'image/jpeg', quality),
   )
 }

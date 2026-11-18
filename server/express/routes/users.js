@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { q } from '../db.js';
 import { httpError } from '../http.js';
-import { assertPassword, cleanUserInput, hashPassword, requireRole, requireSuper } from '../auth.js';
+import { assertPassword, cleanUserInput, hashPassword, normalizeLang, requireRole, requireSuper } from '../auth.js';
 import { canManageUser, setUserChannels } from '../access.js';
 import { openPasswords } from '../sealed.js';
 
@@ -50,9 +50,10 @@ r.post('/', async (req, res) => {
   // новый администратор получает собственное пустое пространство, редактор — пространство создателя
   if (role === 'admin' && !req.user.is_super) throw httpError('Создавать администраторов может только главный администратор', 403);
   const { rows: [u] } = await q(
-    `insert into users (email, name, password_hash, role, owner_id) values ($1, $2, $3, $4, $5)
+    `insert into users (email, name, password_hash, role, owner_id, lang) values ($1, $2, $3, $4, $5, $6)
      returning id, email, name, role, created_at`,
-    [email, name, await hashPassword(password), role, role === 'editor' ? req.user.id : null],
+    // новый пользователь начинает с языком создавшего его администратора (сменить можно в профиле)
+    [email, name, await hashPassword(password), role, role === 'editor' ? req.user.id : null, normalizeLang(req.user.lang) ?? 'ru'],
   );
   res.status(201).json(u);
 });

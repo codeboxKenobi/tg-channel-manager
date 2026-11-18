@@ -1,3 +1,5 @@
+import { useLocale } from '../composables/useLocale'
+
 /** Лимит Telegram для бота при отправке файла (видео). Совпадает с серверным. */
 export const MAX_VIDEO_BYTES = 50 * 1024 * 1024
 
@@ -17,6 +19,7 @@ export interface UploadError extends Error {
  */
 export function uploadFile(file: Blob, contentType: string, onProgress?: (percent: number) => void): Promise<{ url: string }> {
   return new Promise((resolve, reject) => {
+    const { t, tServer } = useLocale()
     const fail = (message: string, status?: number) => reject(Object.assign(new Error(message), { status }) as UploadError)
     const xhr = new XMLHttpRequest()
     xhr.open('POST', '/api/uploads')
@@ -32,14 +35,14 @@ export function uploadFile(file: Blob, contentType: string, onProgress?: (percen
         /* ответ не JSON: например, страница ошибки прокси */
       }
       if (xhr.status >= 200 && xhr.status < 300 && data?.url) return resolve(data)
-      if (data?.error) return fail(data.error, xhr.status)
-      if (xhr.status === 413) return fail('Файл отклонен как слишком большой.', 413)
-      if (xhr.status === 401) return fail('Сессия истекла. Войдите заново', 401)
-      fail(`Не удалось загрузить файл (код ${xhr.status})`, xhr.status)
+      if (data?.error) return fail(tServer(data.error), xhr.status)
+      if (xhr.status === 413) return fail(t('upload.err.tooBig'), 413)
+      if (xhr.status === 401) return fail(t('upload.err.session'), 401)
+      fail(t('upload.err.failed', { status: xhr.status }), xhr.status)
     }
-    xhr.onerror = () => fail('Не удалось загрузить файл: проблема с соединением')
-    xhr.ontimeout = () => fail('Загрузка заняла слишком много времени')
-    xhr.onabort = () => fail('Загрузка прервана')
+    xhr.onerror = () => fail(t('upload.err.network'))
+    xhr.ontimeout = () => fail(t('upload.err.timeout'))
+    xhr.onabort = () => fail(t('upload.err.aborted'))
     xhr.send(file)
   })
 }

@@ -1,12 +1,13 @@
 <script setup lang="ts">
 // Реквизиты для пожертвований.
 // ВНИМАНИЕ: адреса и номер ниже ВЫДУМАННЫЕ (для примера) — перед запуском замените их на свои.
-const wallets = [
+const { t } = useLocale()
+const wallets = computed(() => [
   { id: 'gram', name: 'Gram', value: 'UQBYjsCeWqBBbJbxFDjLzzWWEuNaAtAp1Ovvw0KmbJCd7itE' },
   { id: 'btc', name: 'Bitcoin', value: 'bc1qrrvydsjvmrnjc390qy6qjud9gtrt454tpc4yyc' },
   { id: 'eth', name: 'Ethereum', value: '0x5a9a6A3C145CAAE503cEA0fab036175e1f5Ed384' },
-  { id: 'sbp', name: 'СБП (Служба быстрых платежей)', value: '+7 978 513-63-16' },
-]
+  { id: 'sbp', name: t('support.sbp'), value: '+7 978 513-63-16' },
+])
 
 const copiedId = ref('')
 let timer: ReturnType<typeof setTimeout> | undefined
@@ -42,25 +43,25 @@ onBeforeUnmount(() => clearTimeout(timer))
 
 <template>
   <section>
-    <div class="row head"><h1>Поддержать проект</h1></div>
+    <div class="row head"><h1>{{ t('support.title') }}</h1></div>
 
     <div class="card prose">
-      <p>«Менеджер каналов» — бесплатный проект. Им может пользоваться каждый, платить ничего не нужно, а развивает и поддерживает его один разработчик.</p>
-      <p>Если сервис вам полезен, вы можете по желанию поддержать проект пожертвованием. Это добровольно: на доступ к возможностям сервиса пожертвование никак не влияет.</p>
+      <p>{{ t('support.p1') }}</p>
+      <p>{{ t('support.p2') }}</p>
     </div>
 
     <div class="card">
-      <h2>Реквизиты для пожертвований</h2>
+      <h2>{{ t('support.walletsTitle') }}</h2>
       <ul class="wallets">
         <li v-for="w in wallets" :key="w.id" class="wallet">
           <div class="wallet-name">{{ w.name }}</div>
           <div class="wallet-row">
             <code class="wallet-value">{{ w.value }}</code>
-            <button type="button" :aria-label="`Скопировать: ${w.name}`" @click="copy(w)">{{ copiedId === w.id ? 'Скопировано' : 'Копировать' }}</button>
+            <button type="button" :aria-label="t('support.copyAria', { name: w.name })" @click="copy(w)">{{ copiedId === w.id ? t('support.copied') : t('support.copy') }}</button>
           </div>
         </li>
       </ul>
-      <p class="muted mt-3">Перед переводом сверьте адрес или номер: переводы в криптовалютах необратимы. Спасибо за поддержку!</p>
+      <p class="muted mt-3">{{ t('support.note') }}</p>
     </div>
   </section>
 </template>

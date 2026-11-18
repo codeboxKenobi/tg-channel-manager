@@ -6,6 +6,7 @@ const props = defineProps<{
   empty: string
 }>()
 const emit = defineEmits<{ save: [ids: number[]]; cancel: [] }>()
+const { t } = useLocale()
 
 const picked = ref<number[]>([...props.selected])
 const all = computed(() => props.options.length > 0 && picked.value.length === props.options.length)
@@ -17,15 +18,15 @@ const toggleAll = () => (picked.value = all.value ? [] : props.options.map((o) =
     <h3>{{ title }}</h3>
     <p v-if="!options.length" class="muted">{{ empty }}</p>
     <template v-else>
-      <label class="opt all"><input type="checkbox" :checked="all" @change="toggleAll" /><span>Выбрать все</span></label>
+      <label class="opt all"><input type="checkbox" :checked="all" @change="toggleAll" /><span>{{ t('common.selectAll') }}</span></label>
       <label v-for="o in options" :key="o.id" class="opt">
         <input v-model="picked" type="checkbox" :value="o.id" />
         <span>{{ o.label }}<small v-if="o.hint" class="muted"> · {{ o.hint }}</small></span>
       </label>
     </template>
     <div class="actions">
-      <button class="primary" type="button" :disabled="!options.length" @click="emit('save', picked)">Сохранить</button>
-      <button type="button" @click="emit('cancel')">Отмена</button>
+      <button class="primary" type="button" :disabled="!options.length" @click="emit('save', picked)">{{ t('common.save') }}</button>
+      <button type="button" @click="emit('cancel')">{{ t('common.cancel') }}</button>
     </div>
   </div>
 </template>
