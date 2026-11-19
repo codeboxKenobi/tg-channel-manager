@@ -93,6 +93,16 @@ const en: Table = {
     'Создавать администраторов может только главный администратор': 'Only the main administrator can create administrators',
     'Роль изменить нельзя: создайте пользователя заново': 'The role cannot be changed: create the user again',
     'Каналы закрепляются только за редакторами': 'Channels can only be assigned to editors',
+    'Отправка почты не настроена. Обратитесь к администратору': 'Email sending is not configured. Contact the administrator',
+    'Слишком много запросов кода. Повторите через час': 'Too many code requests. Try again in an hour',
+    'Неверный или просроченный код': 'Invalid or expired code',
+    // причины сбоя отправки письма (server/express/mailer.js); подставляются в середину предложения, поэтому с маленькой буквы
+    'отправка почты не настроена на сервере': 'email sending is not configured on the server',
+    'на сервере не установлен пакет nodemailer': 'the nodemailer package is not installed on the server',
+    'почтовый сервер отклонил логин или пароль SMTP': 'the mail server rejected the SMTP login or password',
+    'не удалось подключиться к почтовому серверу': 'could not connect to the mail server',
+    'почтовый сервер отклонил письмо (проверьте адрес получателя и MAIL_FROM)': 'the mail server rejected the email (check the recipient address and MAIL_FROM)',
+    'ошибка отправки письма': 'email sending error',
   },
   patterns: [
     [/^Не удалось связаться с Telegram: (.+)$/s, (m) => `Could not reach Telegram: ${m[1]}`],

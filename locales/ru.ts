@@ -311,6 +311,22 @@ const ru: Messages = {
   'guide.toc.language': 'Язык интерфейса',
   'guide.toc.delete': 'Удаление аккаунта',
   'guide.toc.faq': 'Частые вопросы',
+  'login.forgot': 'Забыли пароль?',
+  'login.resetDone': 'Пароль изменён. Войдите с новым паролем.',
+  'forgot.title': 'Восстановление пароля',
+  'forgot.intro': 'Укажите email от аккаунта. Мы отправим на него код для смены пароля.',
+  'forgot.sendCode': 'Отправить код',
+  'forgot.backToLogin': 'Вернуться ко входу',
+  'forgot.newPasswordTitle': 'Новый пароль',
+  'forgot.sentNotice': 'Если аккаунт с адресом {email} существует, мы отправили на него письмо с кодом. Код действует {minutes} минут. Проверьте и папку «Спам».',
+  'forgot.codeLabel': 'Код из письма',
+  'forgot.noMail': 'Письмо не пришло?',
+  'forgot.resend': 'Отправить код ещё раз',
+  'forgot.resendIn': 'Повторить можно через {n} с',
+  'users.mailSent': 'Пользователь создан. Письмо с логином и паролем отправлено на {email}.',
+  'users.mailFailed': 'Пользователь создан, но письмо не отправлено: {reason}. Передайте логин и пароль другим способом.',
+  'users.mailUnknown': 'причина неизвестна',
+  'guide.toc.mail': 'Письма и восстановление пароля',
 }
 
 export default ru

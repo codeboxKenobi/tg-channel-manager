@@ -2,7 +2,7 @@
 // Руководство пользователя: содержание слева (на узких экранах сворачивается) и разделы справа.
 // Текст разделов лежит в components/GuideRu.vue и components/GuideEn.vue, язык выбирается в профиле.
 // id разделов одинаковые в обоих языках; при добавлении раздела добавьте его в оба компонента и в locales (guide.toc.<id>).
-const sectionIds = ['start', 'roles', 'bot', 'channels', 'parser', 'drafts', 'published', 'metrics', 'users', 'account', 'language', 'delete', 'faq']
+const sectionIds = ['start', 'roles', 'bot', 'channels', 'parser', 'drafts', 'published', 'metrics', 'users', 'account', 'language', 'mail', 'delete', 'faq']
 const { t, locale } = useLocale()
 const toc = computed(() => sectionIds.map((id) => ({ id, title: t(`guide.toc.${id}`) })))
 

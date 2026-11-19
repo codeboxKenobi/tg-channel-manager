@@ -35,6 +35,12 @@ export const webhookSecret = (token, ownerId) => crypto.createHmac('sha256', tok
 // токен не должен попадать ни в логи, ни в интерфейс (он есть в URL запросов к Bot API)
 const redact = (s) => String(s ?? '').replace(/bot\d+:[A-Za-z0-9_-]{20,}/g, 'bot***');
 
+// Ответ читателю на нажатие «лайка» приходит на языке администратора, которому принадлежит канал (users.lang)
+const LIKE_TOAST = {
+  ru: { removed: 'Лайк убран', added: 'Спасибо! 👍' },
+  en: { removed: 'Like removed', added: 'Thanks! 👍' },
+};
+
 const likeKeyboard = (postId, count) =>
   Markup.inlineKeyboard([[Markup.button.callback(`👍 ${count}`, `like:${postId}`)]]);
 
@@ -42,7 +48,10 @@ const likeKeyboard = (postId, count) =>
 const onLike = (ownerId) => async (ctx) => {
   const postId = Number(ctx.match[1]);
   const userId = ctx.from.id;
-  const own = await q('select 1 from posts p join channels c on c.id = p.channel_id where p.id = $1 and c.owner_id = $2', [postId, ownerId]);
+  const own = await q(
+    'select u.lang from posts p join channels c on c.id = p.channel_id join users u on u.id = c.owner_id where p.id = $1 and c.owner_id = $2',
+    [postId, ownerId],
+  );
   if (!own.rowCount) return ctx.answerCbQuery().catch(() => {});
 
   const removed = await q('delete from post_likes where post_id = $1 and tg_user_id = $2', [postId, userId]);
@@ -54,7 +63,8 @@ const onLike = (ownerId) => async (ctx) => {
      where id = $1 returning likes_count`,
     [postId],
   );
-  await ctx.answerCbQuery(removed.rowCount ? 'Лайк убран' : 'Спасибо! 👍');
+  const toast = LIKE_TOAST[own.rows[0].lang] ?? LIKE_TOAST.ru;
+  await ctx.answerCbQuery(removed.rowCount ? toast.removed : toast.added);
   await ctx.editMessageReplyMarkup(likeKeyboard(postId, rows[0]?.likes_count ?? 0).reply_markup).catch(() => {});
 };
 

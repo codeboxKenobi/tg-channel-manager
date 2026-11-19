@@ -26,7 +26,7 @@ async function welcome(req, u, password) {
   try {
     await sendMail({
       to: u.email,
-      ...welcomeMail({ name: u.name, role: u.role, email: u.email, password, creator: req.user.name, url: appUrl(req) }),
+      ...welcomeMail({ name: u.name, role: u.role, email: u.email, password, creator: req.user.name, url: appUrl(req), lang: normalizeLang(req.user.lang) ?? 'ru' }),
     });
     return { sent: true };
   } catch (e) {

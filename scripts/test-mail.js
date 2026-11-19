@@ -1,4 +1,4 @@
-// Проверка почты: npm run mail:test -- адрес@пример.рф
+// Проверка почты: npm run mail:test -- адрес@пример.рф [ru|en]  (язык письма, по умолчанию ru)
 // Отправляет тестовое письмо в оформлении приложения и показывает причину, если не получилось.
 import { mailEnabled, sendMail, mailErrorText, appUrl } from '../server/express/mailer.js';
 import { welcomeMail } from '../server/express/mail-templates.js';
@@ -15,7 +15,7 @@ if (!mailEnabled()) {
 try {
   const info = await sendMail({
     to,
-    ...welcomeMail({ name: 'Тест', role: 'editor', email: to, password: 'Пример-пароля-123', creator: 'Проверка почты', url: appUrl() }),
+    ...welcomeMail({ name: 'Тест', role: 'editor', email: to, password: 'Пример-пароля-123', creator: 'Проверка почты', url: appUrl(), lang: process.argv[3] === 'en' ? 'en' : 'ru' }),
   });
   console.log('✓ Письмо отправлено:', info.messageId);
 } catch (e) {

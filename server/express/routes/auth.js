@@ -137,7 +137,7 @@ r.post('/forgot', async (req, res) => {
     throw httpError('Слишком много запросов кода. Повторите через час', 429);
   }
   await q('delete from password_resets where expires_at < now()');
-  const { rows: [u] } = await q('select id, email, name from users where email = $1', [email]);
+  const { rows: [u] } = await q('select id, email, name, lang from users where email = $1', [email]);
   if (u) {
     const code = String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
     const salt = crypto.randomBytes(8).toString('hex');
@@ -149,7 +149,7 @@ r.post('/forgot', async (req, res) => {
       [u.id, salt, sha(salt + code), RESET_TTL_MIN],
     );
     // письмо уходит в фоне: время ответа не зависит от того, найден ли адрес
-    sendMail({ to: u.email, ...resetCodeMail({ name: u.name, code, minutes: RESET_TTL_MIN, url: appUrl() }) })
+    sendMail({ to: u.email, ...resetCodeMail({ name: u.name, code, minutes: RESET_TTL_MIN, url: appUrl(), lang: u.lang }) })
       .catch((e) => console.error('Письмо с кодом не отправлено:', e.message));
   }
   res.json({ ok: true, minutes: RESET_TTL_MIN });

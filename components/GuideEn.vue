@@ -177,6 +177,26 @@
     <p>An editor created by an administrator starts with the administrator’s language and can change it in their own profile.</p>
   </section>
 
+  <section id="mail" class="card guide-section prose">
+    <h2>Emails and password recovery</h2>
+    <p>The app sends two kinds of emails. They come in the same design as the app itself and in the language of the recipient’s account.</p>
+
+    <h3>The access email</h3>
+    <p>When an administrator creates an editor (or the main administrator creates an administrator), an email is sent to the new user’s address. It contains the login (which is the email), the password, a “Sign in to the app” button and a short description of how to get started. The description repeats the “Quick start” of this guide for the user’s role. The email comes in the language of the administrator who created the account; the new user can change the language in their profile.</p>
+    <p class="callout callout-warn">The password was sent by email, so change it on the “Profile” page after your first sign-in and delete the email.</p>
+    <p>If the email could not be sent, a warning appears under the form on the “Users” page. The account has already been created, so pass the login and password on in another way.</p>
+
+    <h3>If you forgot your password</h3>
+    <ol>
+      <li>On the sign-in page click “Forgot your password?” and enter the email of your account.</li>
+      <li>Open the email and copy the 6-digit code. It is valid for 15 minutes.</li>
+      <li>Enter the code and a new password (at least 8 characters) and click “Change password”.</li>
+      <li>Sign in with the new password. You will need to sign in again on your other devices.</li>
+    </ol>
+    <p>You have 5 attempts to enter the code, then request a new one. A code can be requested no more than 3 times per hour. If the email does not arrive, check your spam folder.</p>
+    <p class="callout">If there is no “Forgot your password?” link on the sign-in page, email is not configured on the server: ask an administrator to reset your password on the “Users” page.</p>
+  </section>
+
   <section id="delete" class="card guide-section prose">
     <h2>Deleting an account</h2>
     <p>You can delete your account yourself, and if you do not sign in for a long time it is deleted automatically. In both cases the data is erased permanently and cannot be restored from the app.</p>
@@ -203,7 +223,7 @@
       <li>An <b>editor</b> is deleted if they have not signed in themselves for 90 days.</li>
       <li>An <b>administrator</b> is deleted only if neither they nor any of their editors have signed in for 90 days. While someone from the team works in the workspace, it is kept.</li>
     </ul>
-    <p class="callout callout-warn">The app does not send emails, so there is no warning before deletion. If you need the account, sign in at least once every 90 days. Scheduled publications do not count as activity on their own.</p>
+    <p class="callout callout-warn">No warning email is sent before deletion. If you need the account, sign in at least once every 90 days. Scheduled publications do not count as activity on their own.</p>
     <p>The current period is shown in the “Delete account” block of your profile.</p>
   </section>
 
@@ -232,6 +252,10 @@
       <dd>Channel names, post titles and texts, and parser source names are not translated: they stay as you or Telegram set them. Messages that come from Telegram itself are always in English.</dd>
       <dt>The sign-in page opened in a different language</dt>
       <dd>The sign-in and sign-up pages open in the language last chosen in this browser (Russian by default). Switch it with the RU and EN buttons above the form. After you sign in, your account’s language is applied, and if you chose a language manually, it is saved to your account.</dd>
+      <dt>I forgot my password</dt>
+      <dd>On the sign-in page click “Forgot your password?”, then enter your email and the code from the email (see the “Emails and password recovery” section). If there is no such link, ask an administrator to reset your password on the “Users” page.</dd>
+      <dt>The email with the code or with access did not arrive</dt>
+      <dd>Check your spam folder and the address the account was created for. A code can be requested again no more than 3 times per hour. If emails do not arrive at all, tell the server owner: the SMTP settings may not be configured.</dd>
     </dl>
   </section>
 </template>

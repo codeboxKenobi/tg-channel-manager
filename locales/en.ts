@@ -311,6 +311,22 @@ const en: Messages = {
   'guide.toc.language': 'Interface language',
   'guide.toc.delete': 'Deleting an account',
   'guide.toc.faq': 'Frequently asked questions',
+  'login.forgot': 'Forgot your password?',
+  'login.resetDone': 'Password changed. Sign in with your new password.',
+  'forgot.title': 'Password recovery',
+  'forgot.intro': 'Enter the email of your account. We will send a code for changing the password to it.',
+  'forgot.sendCode': 'Send code',
+  'forgot.backToLogin': 'Back to sign in',
+  'forgot.newPasswordTitle': 'New password',
+  'forgot.sentNotice': 'If an account with the address {email} exists, we have sent an email with a code to it. The code is valid for {minutes} minutes. Check your spam folder as well.',
+  'forgot.codeLabel': 'Code from the email',
+  'forgot.noMail': 'Did not get the email?',
+  'forgot.resend': 'Send the code again',
+  'forgot.resendIn': 'You can resend it in {n} s',
+  'users.mailSent': 'The user was created. An email with the login and password was sent to {email}.',
+  'users.mailFailed': 'The user was created, but the email was not sent: {reason}. Pass the login and password on in another way.',
+  'users.mailUnknown': 'reason unknown',
+  'guide.toc.mail': 'Emails and password recovery',
 }
 
 export default en

@@ -2,7 +2,7 @@
 const api = useApi()
 const dialog = useDialog()
 const { user: me, isSuper } = useAuth()
-const { t } = useLocale()
+const { t, tServer } = useLocale()
 const users = ref<any[]>([]) // редакторы моего пространства
 const admins = ref<any[]>([]) // все администраторы (только для главного администратора)
 const channels = ref<any[]>([])
@@ -41,8 +41,8 @@ const create = (role: 'editor' | 'admin', form: { email: string; name: string; p
   run(async () => {
     const res = await api<any>('/users', { method: 'POST', body: { email: form.email, name: form.name, role, ...(await sealFields({ password: form.password })) } })
     notice.value = res?.mail?.sent
-      ? { ok: true, text: `Пользователь создан. Письмо с логином и паролем отправлено на ${res.email}.` }
-      : { ok: false, text: `Пользователь создан, но письмо не отправлено: ${res?.mail?.reason ?? 'причина неизвестна'}. Передайте логин и пароль другим способом.` }
+      ? { ok: true, text: t('users.mailSent', { email: res.email }) }
+      : { ok: false, text: t('users.mailFailed', { reason: res?.mail?.reason ? tServer(res.mail.reason) : t('users.mailUnknown') }) }
     Object.assign(form, { email: '', name: '', password: '' })
   })
 const resetPassword = async (u: any) => {

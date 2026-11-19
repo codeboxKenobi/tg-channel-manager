@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Восстановление пароля: 1) email → код на почту, 2) код + новый пароль.
 const { forgot, resetPassword } = useAuth()
+const { t } = useLocale()
 const route = useRoute()
 const step = ref<'email' | 'code'>('email')
 const email = ref(typeof route.query.email === 'string' ? route.query.email : '')
@@ -45,7 +46,7 @@ async function sendCode() {
 
 async function submit() {
   error.value = ''
-  if (password.value !== repeat.value) return void (error.value = 'Пароли не совпадают')
+  if (password.value !== repeat.value) return void (error.value = t('register.mismatch'))
   busy.value = true
   try {
     await resetPassword(email.value.trim(), code.value, password.value)
@@ -60,44 +61,46 @@ async function submit() {
 
 <template>
   <form v-if="step === 'email'" class="card auth-card" @submit.prevent="sendCode">
+    <LangSwitch variant="buttons" />
     <AuthBrand />
-    <h1>Восстановление пароля</h1>
-    <p class="muted">Укажите email от аккаунта. Мы отправим на него код для смены пароля.</p>
+    <h1>{{ t('forgot.title') }}</h1>
+    <p class="muted">{{ t('forgot.intro') }}</p>
 
-    <label>Email</label>
+    <label>{{ t('field.email') }}</label>
     <input v-model="email" type="email" required autocomplete="username" autofocus />
 
     <p v-if="error" class="error mt-3">{{ error }}</p>
     <div class="actions">
-      <button class="primary" :disabled="busy">Отправить код</button>
+      <button class="primary" :disabled="busy">{{ t('forgot.sendCode') }}</button>
     </div>
-    <p class="muted mt-4"><NuxtLink to="/login">Вернуться ко входу</NuxtLink></p>
+    <p class="muted mt-4"><NuxtLink to="/login">{{ t('forgot.backToLogin') }}</NuxtLink></p>
   </form>
 
   <form v-else class="card auth-card" @submit.prevent="submit">
+    <LangSwitch variant="buttons" />
     <AuthBrand />
-    <h1>Новый пароль</h1>
-    <p class="muted">Если аккаунт с адресом {{ email }} существует, мы отправили на него письмо с кодом. Код действует {{ minutes }} минут. Проверьте и папку «Спам».</p>
+    <h1>{{ t('forgot.newPasswordTitle') }}</h1>
+    <p class="muted">{{ t('forgot.sentNotice', { email, minutes }) }}</p>
 
-    <label>Код из письма</label>
+    <label>{{ t('forgot.codeLabel') }}</label>
     <input v-model="code" required inputmode="numeric" pattern="[0-9 ]{6,7}" maxlength="7" autocomplete="one-time-code" autofocus />
 
-    <label>Новый пароль (не короче 8 символов)</label>
+    <label>{{ t('field.newPassword') }}</label>
     <input v-model="password" type="password" required minlength="8" autocomplete="new-password" />
 
-    <label>Повторите пароль</label>
+    <label>{{ t('field.repeatPassword') }}</label>
     <input v-model="repeat" type="password" required minlength="8" autocomplete="new-password" />
 
     <p v-if="error" class="error mt-3">{{ error }}</p>
     <div class="actions">
-      <button class="primary" :disabled="busy">Сменить пароль</button>
+      <button class="primary" :disabled="busy">{{ t('account.changePassword') }}</button>
     </div>
     <p class="muted mt-4">
-      Письмо не пришло?
-      <button v-if="cooldown <= 0" type="button" class="linkbtn" :disabled="busy" @click="sendCode">Отправить код ещё раз</button>
-      <span v-else>Повторить можно через {{ cooldown }} с</span>
+      {{ t('forgot.noMail') }}
+      <button v-if="cooldown <= 0" type="button" class="linkbtn" :disabled="busy" @click="sendCode">{{ t('forgot.resend') }}</button>
+      <span v-else>{{ t('forgot.resendIn', { n: cooldown }) }}</span>
     </p>
-    <p class="muted mt-2"><NuxtLink to="/login">Вернуться ко входу</NuxtLink></p>
+    <p class="muted mt-2"><NuxtLink to="/login">{{ t('forgot.backToLogin') }}</NuxtLink></p>
   </form>
 </template>
 
