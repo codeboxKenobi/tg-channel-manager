@@ -209,7 +209,7 @@ async function sendMediaFile(token, chatId, file, { caption, parse_mode, reply_m
   form.append('chat_id', String(chatId));
   if (caption) form.append('caption', caption);
   if (parse_mode) form.append('parse_mode', parse_mode);
-  form.append('reply_markup', JSON.stringify(reply_markup));
+  if (reply_markup) form.append('reply_markup', JSON.stringify(reply_markup));
   const ext = path.extname(file).slice(1);
   const video = ext === 'mp4';
   const doc = DOC_EXTS.includes(ext);
@@ -238,7 +238,7 @@ async function sendMediaFile(token, chatId, file, { caption, parse_mode, reply_m
 export async function publishPost(post) {
   const conn = await getBot(post.owner_id);
   if (!conn) throw new Error('Бот не подключён: администратор должен добавить токен бота на странице «Бот»');
-  const keyboard = likeKeyboard(post.id, post.likes_count || 0);
+  const keyboard = {}; // без кнопки «👍»: у новых постов нет inline-клавиатуры
   const parse = post.parse_mode ? { parse_mode: post.parse_mode } : {};
 
   const file = localUpload(post.media_url);

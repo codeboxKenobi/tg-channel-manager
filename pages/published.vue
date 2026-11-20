@@ -71,7 +71,7 @@ watch(channelId, () => {
           <strong>{{ p.title }}</strong>
           <span class="muted"> · {{ p.channel_title }}</span>
         </div>
-        <span class="badge published">👍 {{ fmtNum(p.likes_count) }}</span>
+        <span v-if="p.likes_count > 0" class="badge published">👍 {{ fmtNum(p.likes_count) }}</span>
       </div>
       <p class="post-content">{{ p.content }}</p>
       <a v-if="isDocUrl(p.media_url)" :href="p.media_url" :download="p.media_name || true" class="file-chip">📎 {{ p.media_name || t('post.file') }}</a>
