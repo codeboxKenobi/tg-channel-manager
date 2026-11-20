@@ -5,7 +5,7 @@ import path from 'node:path';
 import { Telegraf, Markup } from 'telegraf';
 import { q } from './db.js';
 import { httpError } from './http.js';
-import { isVideoUrl, localUpload } from './uploads.js';
+import { DOC_EXTS, isDocUrl, isVideoUrl, localUpload } from './uploads.js';
 import { decryptSecret } from './secrets.js';
 
 // У каждого администратора свой бот (токен в workspace_bots, зашифрован). Его каналы, публикации, статистика и лайки
@@ -192,10 +192,19 @@ export async function getMe(token) {
   return data.result;
 }
 
-const MIME = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp', mp4: 'video/mp4' };
+const MIME = {
+  jpg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  mp4: 'video/mp4',
+  pdf: 'application/pdf',
+  txt: 'text/plain',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  xls: 'application/vnd.ms-excel',
+};
 
-/** Фото или видео (.mp4) из файла: multipart с известной длиной (как у curl), без потоковой передачи. */
-async function sendMediaFile(token, chatId, file, { caption, parse_mode, reply_markup }) {
+/** Фото, видео (.mp4) или документ (PDF, TXT, Excel) из файла: multipart с известной длиной (как у curl), без потоковой передачи. */
+async function sendMediaFile(token, chatId, file, { caption, parse_mode, reply_markup, filename }) {
   const form = new FormData();
   form.append('chat_id', String(chatId));
   if (caption) form.append('caption', caption);
@@ -203,19 +212,22 @@ async function sendMediaFile(token, chatId, file, { caption, parse_mode, reply_m
   form.append('reply_markup', JSON.stringify(reply_markup));
   const ext = path.extname(file).slice(1);
   const video = ext === 'mp4';
+  const doc = DOC_EXTS.includes(ext);
+  const kind = doc ? 'document' : video ? 'video' : 'photo';
   if (video) form.append('supports_streaming', 'true');
-  form.append(video ? 'video' : 'photo', new Blob([await readFile(file)], { type: MIME[ext] || 'image/jpeg' }), path.basename(file));
+  // у документа в Telegram показывается имя файла: берём исходное имя, а не хеш
+  form.append(kind, new Blob([await readFile(file)], { type: MIME[ext] || 'image/jpeg' }), doc && filename ? filename : path.basename(file));
 
   let res;
   try {
-    res = await fetch(`https://api.telegram.org/bot${token}/${video ? 'sendVideo' : 'sendPhoto'}`, {
+    res = await fetch(`https://api.telegram.org/bot${token}/${doc ? 'sendDocument' : video ? 'sendVideo' : 'sendPhoto'}`, {
       method: 'POST',
       body: form,
-      signal: AbortSignal.timeout(video ? 300_000 : 60_000),
+      signal: AbortSignal.timeout(video || doc ? 300_000 : 60_000),
     });
   } catch (e) {
     // текст ошибки без URL, чтобы токен не попал в логи и в интерфейс
-    throw new Error(`Не удалось отправить ${video ? 'видео' : 'фото'}: ${redact(e.cause?.code || e.cause?.message || e.message)}`);
+    throw new Error(`Не удалось отправить ${doc ? 'файл' : video ? 'видео' : 'фото'}: ${redact(e.cause?.code || e.cause?.message || e.message)}`);
   }
   const data = await res.json().catch(() => ({}));
   if (!data.ok) throw new Error(redact(data.description) || `Telegram ответил ${res.status}`);
@@ -231,12 +243,12 @@ export async function publishPost(post) {
 
   const file = localUpload(post.media_url);
   if (file) {
-    return sendMediaFile(conn.token, post.tg_chat_id, file, { caption: post.content, ...parse, reply_markup: keyboard.reply_markup });
+    return sendMediaFile(conn.token, post.tg_chat_id, file, { caption: post.content, ...parse, reply_markup: keyboard.reply_markup, filename: post.media_name });
   }
 
   const tg = conn.telegraf.telegram;
   const extra = { ...parse, ...keyboard };
-  const send = isVideoUrl(post.media_url) ? 'sendVideo' : 'sendPhoto';
+  const send = isDocUrl(post.media_url) ? 'sendDocument' : isVideoUrl(post.media_url) ? 'sendVideo' : 'sendPhoto';
   const msg = post.media_url
     ? await tg[send](post.tg_chat_id, post.media_url, { caption: post.content, ...extra })
     : await tg.sendMessage(post.tg_chat_id, post.content, extra);

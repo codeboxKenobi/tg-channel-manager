@@ -74,7 +74,8 @@ watch(channelId, () => {
         <span class="badge published">👍 {{ fmtNum(p.likes_count) }}</span>
       </div>
       <p class="post-content">{{ p.content }}</p>
-      <video v-if="isVideoUrl(p.media_url)" :src="p.media_url" class="thumb" controls playsinline preload="metadata" />
+      <a v-if="isDocUrl(p.media_url)" :href="p.media_url" :download="p.media_name || true" class="file-chip">📎 {{ p.media_name || t('post.file') }}</a>
+      <video v-else-if="isVideoUrl(p.media_url)" :src="p.media_url" class="thumb" controls playsinline preload="metadata" />
       <img v-else-if="p.media_url" :src="p.media_url" class="thumb" alt="" loading="lazy" @error="($event.target as HTMLImageElement).style.display = 'none'" />
       <p class="muted mt-2">{{ t('common.published') }}: {{ fmtDate(p.published_at) }}<span v-if="p.author_name"> · {{ t('published.byAuthor', { name: p.author_name }) }}</span></p>
       <div class="actions">

@@ -3,18 +3,18 @@ import { q } from '../db.js';
 import { getBot } from '../bot.js';
 import { publishById } from '../scheduler.js';
 import { httpError } from '../http.js';
-import { localUpload, removeUploadIfUnused } from '../uploads.js';
+import { cleanFileName, isDocUrl, localUpload, removeUploadIfUnused } from '../uploads.js';
 import { accessibleChannelIds, assertChannelAccess, workspaceId } from '../access.js';
 
 const r = Router();
 
 function parse(body) {
-  const { channel_id, title, content, media_url, parse_mode, scheduled_at } = body ?? {};
+  const { channel_id, title, content, media_url, media_name, parse_mode, scheduled_at } = body ?? {};
   if (!Number.isInteger(Number(channel_id))) throw httpError('Выберите канал');
   if (!title?.trim()) throw httpError('Укажите заголовок');
   if (!content?.trim()) throw httpError('Текст поста не может быть пустым');
   if (content.length > (media_url ? 1024 : 4096)) {
-    throw httpError(media_url ? 'Подпись к фото или видео — не более 1024 символов' : 'Текст — не более 4096 символов');
+    throw httpError(media_url ? 'Подпись к фото, видео или файлу — не более 1024 символов' : 'Текст — не более 4096 символов');
   }
   if (media_url && !/^https?:\/\//i.test(media_url) && !localUpload(media_url)) throw httpError('Некорректная ссылка на файл');
   if (parse_mode && !['HTML', 'MarkdownV2'].includes(parse_mode)) throw httpError('Некорректный parse_mode');
@@ -28,6 +28,8 @@ function parse(body) {
     title: title.trim(),
     content,
     media_url: media_url || null,
+    // имя файла храним только у загруженных документов
+    media_name: media_url && localUpload(media_url) && isDocUrl(media_url) ? cleanFileName(media_name, media_url.split('.').pop().toLowerCase()) : null,
     parse_mode: parse_mode || null,
     scheduled_at: when,
     status: when ? 'scheduled' : 'draft',
@@ -61,9 +63,9 @@ r.post('/', async (req, res) => {
   const p = parse(req.body);
   await assertChannelAccess(req.user, p.channel_id);
   const { rows: [row] } = await q(
-    `insert into posts (channel_id, title, content, media_url, parse_mode, scheduled_at, status, created_by)
-     values ($1, $2, $3, $4, $5, $6, $7, $8) returning *`,
-    [p.channel_id, p.title, p.content, p.media_url, p.parse_mode, p.scheduled_at, p.status, req.user.id],
+    `insert into posts (channel_id, title, content, media_url, media_name, parse_mode, scheduled_at, status, created_by)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9) returning *`,
+    [p.channel_id, p.title, p.content, p.media_url, p.media_name, p.parse_mode, p.scheduled_at, p.status, req.user.id],
   );
   res.status(201).json(row);
 });
@@ -77,10 +79,10 @@ r.put('/:id', async (req, res) => {
   await assertChannelAccess(req.user, p.channel_id);
   if (['published', 'publishing'].includes(cur.status)) throw httpError('Опубликованный пост редактировать нельзя', 409);
   const { rows: [row] } = await q(
-    `update posts set channel_id = $2, title = $3, content = $4, media_url = $5, parse_mode = $6,
-            scheduled_at = $7, status = $8, error = null, updated_at = now()
+    `update posts set channel_id = $2, title = $3, content = $4, media_url = $5, media_name = $6, parse_mode = $7,
+            scheduled_at = $8, status = $9, error = null, updated_at = now()
      where id = $1 returning *`,
-    [req.params.id, p.channel_id, p.title, p.content, p.media_url, p.parse_mode, p.scheduled_at, p.status],
+    [req.params.id, p.channel_id, p.title, p.content, p.media_url, p.media_name, p.parse_mode, p.scheduled_at, p.status],
   );
   if (cur.media_url && cur.media_url !== p.media_url) await removeUploadIfUnused(cur.media_url);
   res.json(row);

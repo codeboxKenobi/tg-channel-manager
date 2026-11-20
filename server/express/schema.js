@@ -153,4 +153,7 @@ create table if not exists password_resets (
 
 -- язык интерфейса пользователя (ru | en); применяется после входа на любом устройстве
 alter table users add column if not exists lang text not null default 'ru';
+
+-- исходное имя прикреплённого файла (PDF, TXT, Excel): под ним файл попадает в Telegram и показывается в интерфейсе
+alter table posts add column if not exists media_name text;
 `;

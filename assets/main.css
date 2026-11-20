@@ -100,6 +100,7 @@ button:disabled { opacity: .5; cursor: default; }
 .pos { color: var(--ok); }
 .post-content { white-space: pre-wrap; overflow-wrap: anywhere; margin: var(--s-2) 0; }
 .thumb { display: block; max-width: 100%; max-height: 200px; border-radius: 8px; border: 1px solid var(--line); margin: var(--s-2) 0; }
+.file-chip { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); margin: var(--s-2) 0; text-decoration: none; }
 .actions { display: flex; gap: var(--s-2); flex-wrap: wrap; margin-top: var(--s-3); }
 .auth-card { max-width: 380px; margin: var(--s-8) auto; }
 .auth-card h1 { margin-bottom: var(--s-3); }

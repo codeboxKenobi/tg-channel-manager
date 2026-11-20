@@ -122,7 +122,8 @@ watch(channelId, () => {
         <span class="badge" :class="p.status">{{ t('status.' + p.status) }}</span>
       </div>
       <p class="post-content">{{ p.content }}</p>
-      <video v-if="isVideoUrl(p.media_url)" :src="p.media_url" class="thumb" controls playsinline preload="metadata" />
+      <a v-if="isDocUrl(p.media_url)" :href="p.media_url" :download="p.media_name || true" class="file-chip">📎 {{ p.media_name || t('post.file') }}</a>
+      <video v-else-if="isVideoUrl(p.media_url)" :src="p.media_url" class="thumb" controls playsinline preload="metadata" />
       <img v-else-if="p.media_url" :src="p.media_url" class="thumb" alt="" loading="lazy" @error="($event.target as HTMLImageElement).style.display = 'none'" />
       <p v-if="p.scheduled_at" class="muted mt-2">{{ t('drafts.publishAt') }}: {{ fmtDate(p.scheduled_at) }}</p>
       <p v-if="p.author_name" class="muted mt-2">{{ t('common.author') }}: {{ p.author_name }}</p>
