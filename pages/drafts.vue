@@ -105,15 +105,19 @@ watch(channelId, () => {
     <p v-if="!loading && !channels.length" class="muted">{{ isAdmin ? t('drafts.noChannelsAdmin') : t('channels.emptyEditor') }}</p>
     <p v-if="error" class="error">{{ error }}</p>
 
-    <div v-if="creating || editing" class="card">
-      <PostForm :key="editing?.id ?? 'new'" :channels="channels" :post="editing" @save="save" @cancel="closeForm" />
+    <div v-if="creating" class="card">
+      <PostForm key="new" :channels="channels" :post="null" @save="save" @cancel="closeForm" />
     </div>
 
     <p v-if="!loading && channels.length && !posts.length" class="muted">{{ t('drafts.empty') }}</p>
 
     <SkeletonCards v-if="loading" :count="3" :actions="4" />
 
-    <article v-for="p in posts" :key="p.id" class="card">
+    <template v-for="p in posts" :key="p.id">
+    <div v-if="editing?.id === p.id" class="card">
+      <PostForm :key="p.id" :channels="channels" :post="editing" @save="save" @cancel="closeForm" />
+    </div>
+    <article v-else class="card">
       <div class="row between">
         <div>
           <strong>{{ p.title }}</strong>
@@ -135,5 +139,6 @@ watch(channelId, () => {
         <button class="danger" :disabled="busy || p.status === 'publishing'" @click="remove(p)">{{ t('common.delete') }}</button>
       </div>
     </article>
+    </template>
   </section>
 </template>
