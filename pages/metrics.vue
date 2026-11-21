@@ -102,9 +102,9 @@ watch(channelId, () => {
         <SkeletonChart v-for="n in 3" :key="n" />
       </template>
       <template v-else>
-        <BarChart :title="t('metrics.chartPosts')" :items="postsSeries" :summary="postsTotal" />
-        <BarChart :title="t('metrics.chartLikes')" :items="likesSeries" :summary="likesTotal" />
-        <BarChart :title="t('metrics.chartSubs')" :items="subsSeries" :summary="subsLast" from-min />
+        <BarChart :title="t('metrics.chartPosts')" :items="postsSeries" :summary="postsTotal" :summary-label="t('chart.total')" />
+        <BarChart :title="t('metrics.chartLikes')" :items="likesSeries" :summary="likesTotal" :summary-label="t('chart.total')" />
+        <BarChart :title="t('metrics.chartSubs')" :items="subsSeries" :summary="subsLast" :summary-label="t('chart.now')" from-min />
       </template>
     </div>
 
