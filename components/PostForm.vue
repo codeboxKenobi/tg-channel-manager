@@ -22,6 +22,22 @@ const showPreview = computed(() => isUploaded.value || /^https?:\/\//i.test(form
 const isVideo = computed(() => isVideoUrl(form.media_url))
 const isDoc = computed(() => isDocUrl(form.media_url))
 const limit = computed(() => (form.media_url ? 1024 : 4096))
+const textEl = ref<HTMLTextAreaElement | null>(null)
+
+/** Вставляет эмодзи в позицию курсора (или вместо выделения) и возвращает фокус в поле. */
+function insertEmoji(emoji: string) {
+  const el = textEl.value
+  const v = form.content
+  const start = el?.selectionStart ?? v.length
+  const end = el?.selectionEnd ?? v.length
+  const next = v.slice(0, start) + emoji + v.slice(end)
+  if (next.length > limit.value) return
+  form.content = next
+  nextTick(() => {
+    el?.focus()
+    el?.setSelectionRange(start + emoji.length, start + emoji.length)
+  })
+}
 // выбор нескольких каналов — только при создании и если каналов больше одного
 const multi = computed(() => !props.post && props.channels.length > 1)
 const allChannels = computed(() => form.channel_ids.length === props.channels.length)
@@ -111,7 +127,8 @@ function submit() {
     <input v-model="form.title" required maxlength="200" />
 
     <label>{{ t('post.textLabel', { len: form.content.length, limit }) }}</label>
-    <textarea v-model="form.content" required :maxlength="limit" />
+    <textarea ref="textEl" v-model="form.content" required :maxlength="limit" />
+    <EmojiPicker @pick="insertEmoji" />
 
     <div class="row" style="align-items: flex-start">
       <div style="flex: 2; min-width: 220px">
