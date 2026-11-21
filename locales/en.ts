@@ -253,6 +253,8 @@ const en: Messages = {
   'support.copyAria': 'Copy: {name}',
   'support.note': 'Check the address or number before sending: cryptocurrency transfers are irreversible. Thank you for your support!',
   'post.new': 'New post',
+  'post.channelsLabel': 'Channels to publish to ({n} selected)',
+  'post.err.noChannel': 'Select at least one channel',
   'post.edit': 'Edit post',
   'post.titleLabel': 'Title (visible only to you)',
   'post.textLabel': 'Post text ({len} / {limit})',

@@ -8,6 +8,7 @@ const UPLOAD_PREFIX = '/api/uploads/'
 
 const form = reactive({
   channel_id: props.post?.channel_id ?? props.channels[0]?.id ?? null,
+  channel_ids: (props.channels[0] ? [props.channels[0].id] : []) as number[], // для нового поста: несколько каналов
   title: props.post?.title ?? '',
   content: props.post?.content ?? '',
   media_url: (props.post?.media_url ?? '') as string,
@@ -21,6 +22,10 @@ const showPreview = computed(() => isUploaded.value || /^https?:\/\//i.test(form
 const isVideo = computed(() => isVideoUrl(form.media_url))
 const isDoc = computed(() => isDocUrl(form.media_url))
 const limit = computed(() => (form.media_url ? 1024 : 4096))
+// выбор нескольких каналов — только при создании и если каналов больше одного
+const multi = computed(() => !props.post && props.channels.length > 1)
+const allChannels = computed(() => form.channel_ids.length === props.channels.length)
+const toggleAllChannels = () => (form.channel_ids = allChannels.value ? [] : props.channels.map((c) => c.id))
 const uploading = ref(false)
 const progress = ref(0)
 const uploadError = ref('')
@@ -73,7 +78,8 @@ async function onFile(e: Event) {
 
 function submit() {
   emit('save', {
-    channel_id: form.channel_id,
+    channel_id: multi.value ? form.channel_ids[0] : form.channel_id,
+    ...(multi.value ? { channel_ids: form.channel_ids } : {}),
     title: form.title,
     content: form.content,
     media_url: form.media_url || null,
@@ -88,10 +94,18 @@ function submit() {
   <form @submit.prevent="submit">
     <h2>{{ post ? t('post.edit') : t('post.new') }}</h2>
 
-    <label>{{ t('common.channel') }}</label>
-    <select v-model="form.channel_id" required>
-      <option v-for="c in channels" :key="c.id" :value="c.id">{{ c.title }}</option>
-    </select>
+    <template v-if="multi">
+      <label>{{ t('post.channelsLabel', { n: form.channel_ids.length }) }}</label>
+      <label class="opt all"><input type="checkbox" :checked="allChannels" @change="toggleAllChannels" /><span>{{ t('common.selectAll') }}</span></label>
+      <label v-for="c in channels" :key="c.id" class="opt"><input v-model="form.channel_ids" type="checkbox" :value="c.id" /><span>{{ c.title }}</span></label>
+      <p v-if="!form.channel_ids.length" class="error mt-2">{{ t('post.err.noChannel') }}</p>
+    </template>
+    <template v-else>
+      <label>{{ t('common.channel') }}</label>
+      <select v-model="form.channel_id" required>
+        <option v-for="c in channels" :key="c.id" :value="c.id">{{ c.title }}</option>
+      </select>
+    </template>
 
     <label>{{ t('post.titleLabel') }}</label>
     <input v-model="form.title" required maxlength="200" />
@@ -133,7 +147,7 @@ function submit() {
     <DateTimePicker v-model="form.scheduled_at" />
 
     <div class="actions">
-      <button class="primary" type="submit" :disabled="uploading">{{ form.scheduled_at ? t('post.schedule') : t('post.saveDraft') }}</button>
+      <button class="primary" type="submit" :disabled="uploading || (multi && !form.channel_ids.length)">{{ form.scheduled_at ? t('post.schedule') : t('post.saveDraft') }}</button>
       <button type="button" @click="emit('cancel')">{{ t('common.cancel') }}</button>
     </div>
   </form>

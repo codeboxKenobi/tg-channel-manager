@@ -60,6 +60,23 @@ r.get('/:id', async (req, res) => {
 });
 
 r.post('/', async (req, res) => {
+  // несколько каналов: на каждый создаётся свой пост (у каждого свой статус, лайки и результат публикации)
+  if (Array.isArray(req.body?.channel_ids)) {
+    const ids = [...new Set(req.body.channel_ids.map(Number))];
+    if (!ids.length || ids.length > 50 || ids.some((n) => !Number.isInteger(n))) throw httpError('Выберите канал');
+    const p = parse({ ...req.body, channel_id: ids[0] });
+    for (const id of ids) await assertChannelAccess(req.user, id); // доступ проверяется ко всем каналам до создания первого поста
+    const created = [];
+    for (const id of ids) {
+      const { rows: [row] } = await q(
+        `insert into posts (channel_id, title, content, media_url, media_name, parse_mode, scheduled_at, status, created_by)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9) returning *`,
+        [id, p.title, p.content, p.media_url, p.media_name, p.parse_mode, p.scheduled_at, p.status, req.user.id],
+      );
+      created.push(row);
+    }
+    return res.status(201).json(created);
+  }
   const p = parse(req.body);
   await assertChannelAccess(req.user, p.channel_id);
   const { rows: [row] } = await q(
