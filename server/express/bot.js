@@ -17,7 +17,7 @@ import { decryptSecret } from './secrets.js';
 // разработка) бот работает через long polling. BOT_MODE=polling принудительно включает polling.
 
 const registry = (globalThis.__tgmBots ??= new Map()); // ownerId → Promise<{ ownerId, token, telegraf, mode, ready, error } | null>
-const ALLOWED_UPDATES = ['callback_query'];
+const ALLOWED_UPDATES = ['callback_query', 'message_reaction_count']; // реакции под постами каналов приходят агрегированными
 
 export const publicUrl = () => (process.env.PUBLIC_URL ?? '').trim().replace(/\/+$/, '');
 
@@ -68,8 +68,34 @@ const onLike = (ownerId) => async (ctx) => {
   await ctx.editMessageReplyMarkup(likeKeyboard(postId, rows[0]?.likes_count ?? 0).reply_markup).catch(() => {});
 };
 
+/**
+ * Реакции под постом канала: Telegram присылает текущие суммарные счётчики (message_reaction_count), а не отдельные события.
+ * Пост ищем по каналу и id сообщения среди каналов этого пространства.
+ */
+const onReactionCount = (ownerId) => async (rc) => {
+  const byKind = {};
+  let total = 0;
+  for (const r of rc.reactions ?? []) {
+    const key = r.type?.type === 'emoji' ? r.type.emoji : r.type?.type === 'paid' ? 'paid' : 'custom';
+    const n = Number(r.total_count) || 0;
+    byKind[key] = (byKind[key] ?? 0) + n;
+    total += n;
+  }
+  await q(
+    `update posts p set reactions = $4::jsonb, reactions_count = $5
+     from channels c
+     where c.id = p.channel_id and c.owner_id = $1 and c.tg_chat_id = $2 and p.tg_message_id = $3`,
+    [ownerId, rc.chat?.id, rc.message_id, JSON.stringify(byKind), total],
+  );
+};
+
 function connect(ownerId, token) {
   const telegraf = new Telegraf(token, { telegram: { agent: new https.Agent({ keepAlive: false, family: 4 }) } });
+  telegraf.use((ctx, next) => {
+    const rc = ctx.update?.message_reaction_count;
+    if (!rc) return next();
+    return onReactionCount(ownerId)(rc).catch((e) => console.error(`Ошибка учёта реакций (пространство ${ownerId}):`, redact(e.message)));
+  });
   telegraf.action(/^like:(\d+)$/, onLike(ownerId));
   const mode = botMode();
   const conn = { ownerId, token, telegraf, mode, error: null, ready: Promise.resolve() };

@@ -6,6 +6,7 @@ const channels = ref<any[]>([])
 const timeline = ref<any[]>([])
 const subscribers = ref<any[]>([])
 const top = ref<any[]>([])
+const reactionTypes = ref<any[]>([])
 const channelId = ref<number | ''>('')
 const error = ref('')
 const loading = ref(true)
@@ -17,12 +18,13 @@ async function load() {
   error.value = ''
   try {
     const query = { channel_id: channelId.value || undefined }
-    const [o, c, tl, s, tp] = await Promise.all([
+    const [o, c, tl, s, tp, rt] = await Promise.all([
       api('/metrics/overview', { query }),
       api('/metrics/channels'),
       api('/metrics/timeline', { query }),
       api('/metrics/subscribers', { query }),
       api('/metrics/top-posts', { query }),
+      api('/metrics/reactions', { query }),
     ])
     if (current !== requestId) return
     overview.value = o
@@ -30,6 +32,7 @@ async function load() {
     timeline.value = tl
     subscribers.value = s
     top.value = tp
+    reactionTypes.value = rt
   } catch (e: any) {
     if (current === requestId) error.value = e.message
   } finally {
@@ -85,6 +88,14 @@ watch(channelId, () => {
       <div class="card stat"><b>{{ fmtNum(overview.drafts) }}</b><span>{{ t('metrics.drafts') }}</span></div>
     </div>
 
+    <p class="muted mt-2">{{ t('metrics.reactionsHint') }}</p>
+    <template v-if="!loading && reactionTypes.length">
+      <h2>{{ t('metrics.reactionsByType') }}</h2>
+      <div class="card">
+        <span v-for="r in reactionTypes" :key="r.emoji" style="display: inline-flex; align-items: baseline; gap: 6px; margin: 4px 16px 4px 0; font-size: 20px">{{ r.emoji }} <b style="font-size: 16px">{{ fmtNum(r.total) }}</b></span>
+      </div>
+    </template>
+
     <h2>{{ t('metrics.dynamics') }}</h2>
     <div class="charts">
       <template v-if="loading">
@@ -128,7 +139,7 @@ watch(channelId, () => {
         <thead><tr><th>{{ t('metrics.col.post') }}</th><th>{{ t('metrics.col.channel') }}</th><th>{{ t('metrics.col.date') }}</th><th class="num">{{ t('metrics.col.likesShort') }}</th></tr></thead>
         <tbody>
           <tr v-for="p in top" :key="p.id">
-            <td :data-label="t('metrics.col.post')">{{ p.title }}</td>
+            <td :data-label="t('metrics.col.post')">{{ p.title }}<small v-if="p.detail" class="muted"> · {{ p.detail }}</small></td>
             <td :data-label="t('metrics.col.channel')">{{ p.channel_title }}</td>
             <td :data-label="t('metrics.col.date')">{{ fmtDate(p.published_at) }}</td>
             <td class="num" :data-label="t('metrics.col.likesShort')">{{ fmtNum(p.likes_count) }}</td>
