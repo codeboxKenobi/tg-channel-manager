@@ -20,7 +20,7 @@ const TEXTS = {
       editor: [
         'Войдите в приложение по логину и паролю из этого письма.',
         'Администратор закрепит за вами каналы. Пока доступ не выдан, вы увидите «Вам пока не назначены каналы» — напишите администратору.',
-        'Откройте «Подготовка постов» → «Новый пост»: введите текст, добавьте картинку или видео MP4 и выберите время либо нажмите «Опубликовать сейчас».',
+        'Откройте «Подготовка постов» → «Новый пост»: введите текст, добавьте картинку, видео MP4 или файл (PDF, TXT, Excel) и выберите время либо нажмите «Опубликовать сейчас».',
         'Результат смотрите в «Опубликованных» и «Метриках». Готовые посты можно взять в «Парсере» из публичных Telegram-каналов.',
       ],
       admin: [
@@ -73,7 +73,7 @@ const TEXTS = {
       editor: [
         'Sign in to the app with the login and password from this email.',
         'An administrator will assign channels to you. Until access is granted you will see “No channels have been assigned to you yet”: contact the administrator.',
-        'Open “Post preparation” → “New post”: enter the text, add an image or an MP4 video and choose a time, or click “Publish now”.',
+        'Open “Post preparation” → “New post”: enter the text, add an image, an MP4 video or a file (PDF, TXT, Excel) and choose a time, or click “Publish now”.',
         'See the results in “Published” and “Metrics”. You can take ready-made posts from public Telegram channels in the “Parser”.',
       ],
       admin: [
