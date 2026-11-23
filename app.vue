@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const { user, isAdmin, logout } = useAuth()
+const { user, isAdmin, isSuper, logout } = useAuth()
 const { t, locale } = useLocale()
 // заголовок вкладки и атрибут lang страницы следуют за языком интерфейса
 useHead(computed(() => ({ title: t('app.name'), htmlAttrs: { lang: locale.value } })))
@@ -44,6 +44,7 @@ async function out() {
           <NuxtLink to="/metrics">{{ t('nav.metrics') }}</NuxtLink>
           <NuxtLink v-if="isAdmin" to="/bot">{{ t('nav.bot') }}</NuxtLink>
           <NuxtLink v-if="isAdmin" to="/users">{{ t('nav.users') }}</NuxtLink>
+          <NuxtLink v-if="isSuper" to="/monitoring">{{ t('nav.monitoring') }}</NuxtLink>
           <hr class="menu-sep" />
           <NuxtLink to="/guide">{{ t('nav.guide') }}</NuxtLink>
           <NuxtLink to="/support">{{ t('nav.support') }}</NuxtLink>
