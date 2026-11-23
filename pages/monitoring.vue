@@ -118,11 +118,15 @@ const deleteIn = (u: any) => (u.days_left === null ? '—' : t('monitoring.days'
         </thead>
         <tbody>
           <tr v-for="u in users" :key="u.id">
-            <td :data-label="t('monitoring.col.user')">
-              {{ u.name }}
-              <span v-if="u.id === me?.id" class="tagchip">{{ t('users.you') }}</span>
-              <span v-else-if="u.is_super" class="tagchip">{{ t('users.main') }}</span>
-              <br /><small class="muted">{{ u.email }}</small>
+            <td :data-label="t('monitoring.col.user')" class="user-cell">
+              <div class="uwho">
+                <span>
+                  {{ u.name }}
+                  <span v-if="u.id === me?.id" class="tagchip">{{ t('users.you') }}</span>
+                  <span v-else-if="u.is_super" class="tagchip">{{ t('users.main') }}</span>
+                </span>
+                <small class="muted email">{{ u.email }}</small>
+              </div>
             </td>
             <td :data-label="t('monitoring.col.role')">{{ t('role.' + u.role) }}</td>
             <td :data-label="t('monitoring.col.workspace')">{{ u.role === 'editor' ? u.owner_name || '—' : t('monitoring.own') }}</td>
@@ -142,3 +146,14 @@ const deleteIn = (u: any) => (u.days_left === null ? '—' : t('monitoring.days'
     <p class="muted mt-2">{{ t('monitoring.hint') }}</p>
   </section>
 </template>
+
+<style scoped>
+.uwho { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.email { overflow-wrap: anywhere; word-break: break-word; }
+@media (max-width: 640px) {
+  .uwho { align-items: flex-end; text-align: right; flex: 1 1 auto; }
+  .user-cell { align-items: flex-start; }
+  .user-cell::before { padding-top: 1px; }
+  td { min-width: 0; }
+}
+</style>
